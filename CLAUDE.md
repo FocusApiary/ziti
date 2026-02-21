@@ -162,4 +162,4 @@ ziti-router.focuspass.com  -> CNAME -> <dc-ddns-hostname>
 - `runAsNonRoot` fails with non-numeric user `ziggy` — must set `runAsUser: 2171` explicitly
 - trust-manager default trust namespace is cert-manager, not the release namespace — requires `app.trust.namespace=ziti`
 - Controller ClusterIP changes on reinstall — CoreDNS hosts entry must be updated
-- CF API token in AKV (`cloudflare-api-token`) lacks DNS record permissions for omlabs.org zone
+- CF API token in AKV (`cloudflare-api-token`) lacks DNS record permissions for focuspass.com zone

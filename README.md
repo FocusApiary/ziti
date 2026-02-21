@@ -66,5 +66,5 @@ All secrets stored in Azure Key Vault `omlab-secrets`:
 
 | Remote | URL | Role |
 |--------|-----|------|
-| gitea | `buck-git.omlabs.org/om-labs/ziti` | Source of truth |
-| github | `github.com/Om-Labs/ziti` | Mirror |
+| gitea | `git.developerdojo.org/focusapiary/ziti` | Source of truth |
+| github | `github.com/FocusApiary/ziti` | Mirror |
