@@ -2,6 +2,10 @@
 
 ctrl:
   endpoint: ziti-controller-ctrl.ziti.svc:443
+  # Prefer in-cluster controller endpoint for router control channel.
+  # Enrollment tokens currently advertise public hostnames that are not
+  # consistently reachable from this namespace during bootstrap.
+  endpointsFile: ""
 
 edge:
   advertisedHost: ziti-router.focuspass.com
