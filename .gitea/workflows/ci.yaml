@@ -56,6 +56,6 @@ jobs:
         env:
           GITHUB_MIRROR_TOKEN: ${{ secrets.GITHUB_MIRROR_TOKEN }}
         run: |
-          git remote add github "https://x-access-token:${GITHUB_MIRROR_TOKEN}@github.com/Om-Labs/ziti.git" 2>/dev/null || true
+          git remote add github "https://x-access-token:${GITHUB_MIRROR_TOKEN}@github.com/FocusApiary/ziti.git" 2>/dev/null || true
           git push github main --force
           git push github --tags --force
