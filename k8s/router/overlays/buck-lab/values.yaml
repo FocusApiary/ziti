@@ -1,10 +1,7 @@
 # Buck-lab router overrides.
 
 ctrl:
-  endpoint: ziti-controller-ctrl.ziti.svc:443
-  # Chart renders ctrl.endpointsFile unconditionally; keep a concrete filename
-  # to avoid nil config values on startup.
-  endpointsFile: endpoints.yml
+  endpoint: ziti-controller-client.ziti.svc:443
 
 edge:
   advertisedHost: ziti-router.focuspass.com
