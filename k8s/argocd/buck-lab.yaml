@@ -28,7 +28,7 @@ spec:
         valueFiles:
           - $values/k8s/controller/values.yaml
           - $values/k8s/controller/overlays/buck-lab/values.yaml
-    - repoURL: git@github.com:FocusApiary/ziti.git
+    - repoURL: https://github.com/FocusApiary/ziti.git
       targetRevision: main
       ref: values
   destination:
@@ -58,7 +58,7 @@ spec:
         valueFiles:
           - $values/k8s/router/values.yaml
           - $values/k8s/router/overlays/buck-lab/values.yaml
-    - repoURL: git@github.com:FocusApiary/ziti.git
+    - repoURL: https://github.com/FocusApiary/ziti.git
       targetRevision: main
       ref: values
   destination:
