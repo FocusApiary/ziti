@@ -30,6 +30,9 @@ scripts/sync_images.sh
 
 # Extract & store secrets in AKV
 scripts/store_secrets.sh
+
+# Rotate/reconcile router enrollment JWT (AKV + Kubernetes)
+scripts/rotate_router_jwt.sh
 ```
 
 ## Repo Layout
@@ -44,6 +47,7 @@ scripts/
   deploy.sh           Idempotent full deploy
   sync_images.sh      Mirror upstream -> Harbor
   store_secrets.sh    Extract k8s secrets -> AKV
+  rotate_router_jwt.sh Re-enroll router and upsert enrollment JWT
 ```
 
 ## Overlay Pattern
@@ -56,6 +60,7 @@ All secrets stored in Azure Key Vault `omlab-secrets`:
 - `ziti-admin-password` — controller admin credential
 - `ziti-ctrl-root-ca` — controller root CA (needed by routers)
 - `ziti-ctrl-signing-cert` — controller signing cert
+- `ziti-router-buck-lab-router-01-jwt` — router enrollment token (for re-enrollment/recovery)
 
 ## Remotes
 

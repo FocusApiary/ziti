@@ -18,11 +18,30 @@ DRY_RUN="${DRY_RUN:-}"
 VERBOSE="${VERBOSE:-}"
 CTRL_MGMT_PORT="${CTRL_MGMT_PORT:-1280}"
 ROUTER_IDENTITY="${ZITI_ROUTER_IDENTITY:-buck-lab-router-01}"
+AKV_NAME="${AKV_NAME:-omlab-secrets}"
 
 # ---------- helpers ----------------------------------------------------------
 
 log() { printf '[%s] ==> %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 warn() { printf '[%s] WARN: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+
+get_admin_password() {
+  local pw=""
+  if command -v az >/dev/null 2>&1; then
+    pw="$(az keyvault secret show \
+      --vault-name "$AKV_NAME" \
+      --name "ziti-admin-password" \
+      --query value -o tsv 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$pw" ]]; then
+    printf '%s' "$pw"
+    return 0
+  fi
+
+  kubectl -n ziti get secret ziti-controller-admin-secret \
+    -o jsonpath='{.data.admin-password}' | base64 -d
+}
 
 # Run a ziti edge command inside the controller pod.
 # Returns the command's exit code. Stderr is captured and shown on failure
@@ -77,8 +96,7 @@ if [[ -z "$DRY_RUN" ]]; then
     exit 1
   fi
 
-  ADMIN_PW=$(kubectl -n ziti get secret ziti-controller-admin-secret \
-    -o jsonpath='{.data.admin-password}' | base64 -d)
+  ADMIN_PW="$(get_admin_password)"
 
   log "Logging in to controller ($CTRL_POD)"
   if ! kubectl -n ziti exec "$CTRL_POD" -- sh -c \

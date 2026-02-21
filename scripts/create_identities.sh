@@ -25,6 +25,24 @@ OUT_DIR="$ROOT_DIR/out/identities"
 log() { printf '[%s] ==> %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 warn() { printf '[%s] WARN: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 
+get_admin_password() {
+  local pw=""
+  if command -v az >/dev/null 2>&1; then
+    pw="$(az keyvault secret show \
+      --vault-name "$AKV_NAME" \
+      --name "ziti-admin-password" \
+      --query value -o tsv 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$pw" ]]; then
+    printf '%s' "$pw"
+    return 0
+  fi
+
+  kubectl -n ziti get secret ziti-controller-admin-secret \
+    -o jsonpath='{.data.admin-password}' | base64 -d
+}
+
 # ---------- parse args -------------------------------------------------------
 
 NAMES=("$@")
@@ -53,8 +71,7 @@ else
     exit 1
   fi
 
-  ADMIN_PW=$(kubectl -n ziti get secret ziti-controller-admin-secret \
-    -o jsonpath='{.data.admin-password}' | base64 -d)
+  ADMIN_PW="$(get_admin_password)"
 
   log "Logging in to controller ($CTRL_POD)"
   kubectl -n ziti exec "$CTRL_POD" -- sh -c \

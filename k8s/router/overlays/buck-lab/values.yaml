@@ -22,3 +22,7 @@ nodeSelector:
 
 imagePullSecrets:
   - name: harbor-pull-secret
+
+# Enrollment JWT is sourced from AKV via ESO.
+enrollmentJwtFromSecret: true
+enrollmentJwtSecretName: ziti-router-buck-lab-router-01-jwt

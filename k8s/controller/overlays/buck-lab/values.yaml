@@ -19,3 +19,7 @@ nodeSelector:
 
 imagePullSecrets:
   - name: harbor-pull-secret
+
+# Controller admin credentials are sourced from AKV via ESO.
+useCustomAdminSecret: true
+customAdminSecretName: ziti-controller-admin-secret

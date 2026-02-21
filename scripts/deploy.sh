@@ -22,6 +22,24 @@ AKV_NAME="${AKV_NAME:-omlab-secrets}"
 
 log() { echo "==> $*"; }
 
+get_admin_password() {
+  local pw=""
+  if command -v az >/dev/null 2>&1; then
+    pw="$(az keyvault secret show \
+      --vault-name "$AKV_NAME" \
+      --name "ziti-admin-password" \
+      --query value -o tsv 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$pw" ]]; then
+    printf '%s' "$pw"
+    return 0
+  fi
+
+  kubectl -n ziti get secret ziti-controller-admin-secret \
+    -o jsonpath='{.data.admin-password}' | base64 -d
+}
+
 wait_for_rollout() {
   local ns="$1" resource="$2" timeout="${3:-300}"
   kubectl -n "$ns" rollout status "$resource" --timeout="${timeout}s" || true
@@ -78,39 +96,16 @@ if [[ -n "$SKIP_ROUTER" ]]; then
   exit 0
 fi
 
-# Ensure router enrollment JWT exists as a k8s secret.
+# Ensure router enrollment JWT exists and is fresh.
 ROUTER_NAME="${ZITI_ROUTER_NAME:-buck-lab-router-01}"
 JWT_SECRET="ziti-router-${ROUTER_NAME}-jwt"
 
-if kubectl -n ziti get secret "$JWT_SECRET" >/dev/null 2>&1; then
-  log "Router enrollment JWT secret ($JWT_SECRET) already exists"
-else
-  log "Creating edge-router '$ROUTER_NAME' and storing enrollment JWT"
-
-  # Exec into the controller pod to create the router.
-  CTRL_POD=$(kubectl -n ziti get pod -l app.kubernetes.io/name=ziti-controller \
-    -o jsonpath='{.items[0].metadata.name}')
-
-  # Login as admin.
-  ADMIN_PW=$(kubectl -n ziti get secret ziti-controller-admin-secret \
-    -o jsonpath='{.data.admin-password}' | base64 -d)
-
-  kubectl -n ziti exec "$CTRL_POD" -- sh -c "
-    ziti edge login localhost:${CTRL_MGMT_PORT:-1280} -u admin -p '$ADMIN_PW' --yes &&
-    ziti edge create edge-router '$ROUTER_NAME' \
-      -o /tmp/router.jwt \
-      --jwt-output-file /tmp/router.jwt \
-      --tunneler-enabled 2>/dev/null || true
-  "
-
-  # Extract JWT from the pod.
-  ROUTER_JWT=$(kubectl -n ziti exec "$CTRL_POD" -- cat /tmp/router.jwt)
-
-  # Create k8s secret with the JWT (key must be "enrollmentJwt" for the chart).
-  kubectl -n ziti create secret generic "$JWT_SECRET" \
-    --from-literal=enrollmentJwt="$ROUTER_JWT" \
-    --dry-run=client -o yaml | kubectl apply -f -
-fi
+log "Rotating/reconciling router enrollment JWT ($JWT_SECRET)"
+AKV_NAME="$AKV_NAME" \
+ZITI_ROUTER_NAME="$ROUTER_NAME" \
+JWT_SECRET_NAME="$JWT_SECRET" \
+CTRL_MGMT_PORT="${CTRL_MGMT_PORT:-1280}" \
+"$ROOT_DIR/scripts/rotate_router_jwt.sh"
 
 log "Installing/upgrading ziti-router (chart $ROUTER_CHART_VERSION)"
 
@@ -140,8 +135,7 @@ log "Verifying deployment"
 CTRL_POD=$(kubectl -n ziti get pod -l app.kubernetes.io/name=ziti-controller \
   -o jsonpath='{.items[0].metadata.name}')
 
-ADMIN_PW=$(kubectl -n ziti get secret ziti-controller-admin-secret \
-  -o jsonpath='{.data.admin-password}' | base64 -d)
+ADMIN_PW="$(get_admin_password)"
 
 kubectl -n ziti exec "$CTRL_POD" -- sh -c "
   ziti edge login localhost:${CTRL_MGMT_PORT:-1280} -u admin -p '$ADMIN_PW' --yes &&
