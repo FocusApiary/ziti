@@ -2,10 +2,9 @@
 
 ctrl:
   endpoint: ziti-controller-ctrl.ziti.svc:443
-  # Prefer in-cluster controller endpoint for router control channel.
-  # Enrollment tokens currently advertise public hostnames that are not
-  # consistently reachable from this namespace during bootstrap.
-  endpointsFile: ""
+  # Chart renders ctrl.endpointsFile unconditionally; keep a concrete filename
+  # to avoid nil config values on startup.
+  endpointsFile: endpoints.yml
 
 edge:
   advertisedHost: ziti-router.focuspass.com
@@ -30,9 +29,3 @@ imagePullSecrets:
 # Enrollment JWT is sourced from AKV via ESO.
 enrollmentJwtFromSecret: true
 enrollmentJwtSecretName: ziti-router-buck-lab-router-01-jwt
-
-# Chart defaults ZITI_ROUTER_NAME to release name ("ziti-router"), but the
-# existing edge-router identity is "buck-lab-router-01". Override to keep
-# enrollment JWT and router identity aligned.
-env:
-  ZITI_ROUTER_NAME: buck-lab-router-01
