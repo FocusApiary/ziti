@@ -15,7 +15,7 @@ set -euo pipefail
 #   scripts/sync_images.sh                    # sync all images
 #   ZITI_TAG=1.2.0 scripts/sync_images.sh     # pin a specific tag
 
-HARBOR_HOST="${HARBOR_HOST:-harbor.buck-lab-k8s.omlabs.org:32632}"
+HARBOR_HOST="${HARBOR_HOST:-harbor.focuscell.org}"
 HARBOR_PROJECT="${HARBOR_PROJECT:-openziti}"
 ZITI_TAG="${ZITI_TAG:-1.7.2}"
 DEST_TLS_VERIFY="${DEST_TLS_VERIFY:-false}"

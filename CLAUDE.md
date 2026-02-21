@@ -17,7 +17,7 @@ GitHub (source of truth) -> CI (lint + image sync to Harbor) -> ArgoCD or deploy
 - Container hardening: runAsUser 2171 (ziggy), drop ALL caps, seccomp RuntimeDefault
 - Storage: longhorn-r2 for persistent volumes
 - Node placement: `om-labs.io/storage-node: "true"`
-- Images: mirrored to Harbor (`harbor.buck-lab-k8s.omlabs.org:32632/openziti/`), never pulled from Docker Hub at runtime
+- Images: mirrored to Harbor (`harbor.focuscell.org/openziti/`), never pulled from Docker Hub at runtime
 
 ## Hostnames (3-level for Cloudflare compat)
 
@@ -37,7 +37,7 @@ Client → Ziti Desktop Edge → Ziti overlay → Router (host mode)
 
 | Service | Hostname | Port | Notes |
 |---------|----------|------|-------|
-| harbor | harbor.buck-lab-k8s.omlabs.org | 443 | |
+| harbor | harbor.focuscell.org | 443 | |
 | keycloak | auth-buck.omlabs.org | 443 | OIDC provider |
 | longhorn | longhorn.buck-lab-k8s.omlabs.org | 443 | |
 | mattermost | chat.focusjam.com | 443 | |

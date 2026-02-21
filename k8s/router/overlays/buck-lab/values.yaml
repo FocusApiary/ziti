@@ -14,7 +14,7 @@ persistence:
   storageClass: longhorn-r2
 
 image:
-  repository: harbor.buck-lab-k8s.omlabs.org:32632/openziti/ziti-router
+  repository: harbor.focuscell.org/openziti/ziti-router
   tag: "1.7.2"
 
 nodeSelector:

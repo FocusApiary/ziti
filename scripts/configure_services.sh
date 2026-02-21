@@ -122,7 +122,7 @@ log "--- Phase 2: Intercept configs + services ---"
 # Format: "service_name|intercept_hostname|port|host_config"
 # host_config defaults to ingress-host (routes to Envoy Gateway) when empty.
 SERVICES=(
-  "harbor|harbor.buck-lab-k8s.omlabs.org|443|"
+  "harbor|harbor.focuscell.org|443|"
   "keycloak|auth-buck.omlabs.org|443|"
   "longhorn|longhorn.buck-lab-k8s.omlabs.org|443|"
   "mattermost|chat.focusjam.com|443|"

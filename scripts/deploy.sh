@@ -15,7 +15,7 @@ OVERLAY="${ZITI_OVERLAY:-buck-lab}"
 CTRL_CHART_VERSION="${ZITI_CTRL_CHART_VERSION:-3.0.0}"
 ROUTER_CHART_VERSION="${ZITI_ROUTER_CHART_VERSION:-2.0.0}"
 SKIP_ROUTER="${SKIP_ROUTER:-}"
-HARBOR_HOST="${HARBOR_HOST:-harbor.buck-lab-k8s.omlabs.org}"
+HARBOR_HOST="${HARBOR_HOST:-harbor.focuscell.org}"
 AKV_NAME="${AKV_NAME:-omlab-secrets}"
 
 # ---------- helpers ----------------------------------------------------------

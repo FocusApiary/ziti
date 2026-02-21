@@ -37,7 +37,7 @@ jobs:
 
       - name: Mirror images to Harbor
         env:
-          HARBOR_HOST: harbor.buck-lab-k8s.omlabs.org
+          HARBOR_HOST: harbor.focuscell.org
           HARBOR_USER: ${{ secrets.HARBOR_USER }}
           HARBOR_PASS: ${{ secrets.HARBOR_PASS }}
         run: scripts/sync_images.sh
