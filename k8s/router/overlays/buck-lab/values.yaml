@@ -4,11 +4,11 @@ ctrl:
   endpoint: ziti-controller-ctrl.ziti.svc:443
 
 edge:
-  advertisedHost: ziti-router-buck.omlabs.org
+  advertisedHost: ziti-router.focuspass.com
 
 linkListeners:
   transport:
-    advertisedHost: ziti-router-buck.omlabs.org
+    advertisedHost: ziti-router.focuspass.com
 
 persistence:
   storageClass: longhorn-r2

@@ -14,15 +14,15 @@ set -euo pipefail
 #   DRY_RUN=1 scripts/patch_coredns.sh      # show diff only
 #
 # Required entries (all point to Envoy Gateway proxy ClusterIP):
-#   auth-buck.omlabs.org      — Keycloak OIDC, needed by Coder/Slidee/ArgoCD/GitLab
+#   auth.focuspass.com        — Keycloak OIDC, needed by Coder/Slidee/ArgoCD/GitLab
 #   argocd.focuscell.org      — ArgoCD, needed by GitLab webhooks
 #   longhorn.focuscell.org    — Longhorn UI
 #   s3.focuscell.org          — SeaweedFS S3 API endpoint
 #   files.focuscell.org       — SeaweedFS UI endpoint
 #   kas.developerdojo.org     — GitLab KAS endpoint
 #   dev.slidee.net            — Slidee, needs OIDC callback resolution
-#   gitlab-buck.omlabs.org    — GitLab, needed for OIDC callbacks + webhook deliveries
-#   chat.focusjam.com         — Mattermost, needed by OpenClaw agents (no public DNS)
+#   git.developerdojo.org     — GitLab, needed for OIDC callbacks + webhook deliveries
+#   chat.focusbuzz.org        — Mattermost, needed by OpenClaw agents (no public DNS)
 #   pbx.focuscell.org         — FreeSWITCH WebRTC, VoIP softphone
 #   admin.focuscell.org       — VoIP admin panel
 #   api.focuscell.org         — VoIP API + SignalWire SMS webhooks
@@ -36,15 +36,15 @@ INGRESS_SVC="${INGRESS_SVC:-envoy-envoy-gateway-system-main-b3b376e9}"
 
 # Hostnames to add (all resolve to the Envoy Gateway proxy ClusterIP).
 HOSTS=(
-  "auth-buck.omlabs.org"
+  "auth.focuspass.com"
   "argocd.focuscell.org"
   "longhorn.focuscell.org"
   "s3.focuscell.org"
   "files.focuscell.org"
   "kas.developerdojo.org"
   "dev.slidee.net"
-  "gitlab-buck.omlabs.org"
-  "chat.focusjam.com"
+  "git.developerdojo.org"
+  "chat.focusbuzz.org"
   "studio.hardmagic.com"
   "studio.hypersight.net"
   "pbx.focuscell.org"

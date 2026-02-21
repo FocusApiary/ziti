@@ -1,10 +1,10 @@
 # Buck-lab controller overrides.
 
 clientApi:
-  advertisedHost: ziti-ctrl-buck.omlabs.org
+  advertisedHost: ziti.focuspass.com
 
 ctrlPlane:
-  advertisedHost: ziti-ctrl-buck.omlabs.org
+  advertisedHost: ziti.focuspass.com
 
 persistence:
   storageClass: longhorn-r2
