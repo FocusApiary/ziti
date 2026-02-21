@@ -15,7 +15,11 @@ set -euo pipefail
 #
 # Required entries (all point to Envoy Gateway proxy ClusterIP):
 #   auth-buck.omlabs.org      — Keycloak OIDC, needed by Coder/Slidee/ArgoCD/GitLab
-#   argocd-buck.omlabs.org    — ArgoCD, needed by GitLab webhooks
+#   argocd.focuscell.org      — ArgoCD, needed by GitLab webhooks
+#   longhorn.focuscell.org    — Longhorn UI
+#   s3.focuscell.org          — SeaweedFS S3 API endpoint
+#   files.focuscell.org       — SeaweedFS UI endpoint
+#   kas.developerdojo.org     — GitLab KAS endpoint
 #   dev.slidee.net            — Slidee, needs OIDC callback resolution
 #   gitlab-buck.omlabs.org    — GitLab, needed for OIDC callbacks + webhook deliveries
 #   chat.focusjam.com         — Mattermost, needed by OpenClaw agents (no public DNS)
@@ -33,7 +37,11 @@ INGRESS_SVC="${INGRESS_SVC:-envoy-envoy-gateway-system-main-b3b376e9}"
 # Hostnames to add (all resolve to the Envoy Gateway proxy ClusterIP).
 HOSTS=(
   "auth-buck.omlabs.org"
-  "argocd-buck.omlabs.org"
+  "argocd.focuscell.org"
+  "longhorn.focuscell.org"
+  "s3.focuscell.org"
+  "files.focuscell.org"
+  "kas.developerdojo.org"
   "dev.slidee.net"
   "gitlab-buck.omlabs.org"
   "chat.focusjam.com"
