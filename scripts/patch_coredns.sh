@@ -26,6 +26,10 @@ set -euo pipefail
 #   pbx.focuscell.org         — FreeSWITCH WebRTC, VoIP softphone
 #   admin.focuscell.org       — VoIP admin panel
 #   api.focuscell.org         — VoIP API + SignalWire SMS webhooks
+#   api.studio.hardmagic.com  — HardMagic Studio API
+#   agents.focuschef.com      — OpenClaw dashboard
+#   admin.focuschef.com       — OpenClaw admin panel
+#   *.focuschef.com (25 agents) — Individual OpenClaw agent endpoints
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -51,6 +55,34 @@ HOSTS=(
   "admin.focuscell.org"
   "api.focuscell.org"
   "harbor.focuscell.org"
+  "api.studio.hardmagic.com"
+  "agents.focuschef.com"
+  "admin.focuschef.com"
+  "angie.focuschef.com"
+  "asma.focuschef.com"
+  "atlas.focuschef.com"
+  "candace.focuschef.com"
+  "casey.focuschef.com"
+  "cody.focuschef.com"
+  "dan.focuschef.com"
+  "devan.focuschef.com"
+  "eddy.focuschef.com"
+  "emmy.focuschef.com"
+  "finn.focuschef.com"
+  "hira.focuschef.com"
+  "ian.focuschef.com"
+  "karen.focuschef.com"
+  "knox.focuschef.com"
+  "lee.focuschef.com"
+  "maggie.focuschef.com"
+  "marisa.focuschef.com"
+  "mark.focuschef.com"
+  "micky.focuschef.com"
+  "miley.focuschef.com"
+  "paris.focuschef.com"
+  "patty.focuschef.com"
+  "sally.focuschef.com"
+  "venny.focuschef.com"
 )
 
 # ---------- helpers ----------------------------------------------------------
