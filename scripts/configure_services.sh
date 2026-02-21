@@ -123,16 +123,16 @@ log "--- Phase 2: Intercept configs + services ---"
 # host_config defaults to ingress-host (routes to Envoy Gateway) when empty.
 SERVICES=(
   "harbor|harbor.focuscell.org|443|"
-  "keycloak|auth-buck.omlabs.org|443|"
-  "longhorn|longhorn.buck-lab-k8s.omlabs.org|443|"
-  "mattermost|chat.focusjam.com|443|"
-  "seaweedfs-api|seaweedfs.buck-lab-k8s.omlabs.org|443|"
-  "seaweedfs-console|seaweedfs-console.buck-lab-k8s.omlabs.org|443|"
+  "keycloak|auth.focuspass.com|443|"
+  "longhorn|longhorn.focuscell.org|443|"
+  "mattermost|chat.focusbuzz.org|443|"
+  "seaweedfs-api|s3.focuscell.org|443|"
+  "seaweedfs-console|files.focuscell.org|443|"
   "slidee|dev.slidee.net|443|"
-  "vaultwarden|vault.omlabs.org|443|"
+  "vaultwarden|vault.focuspass.com|443|"
   "coder|developerdojo.org|443|"
   "coder-wildcard|*.developerdojo.org|443|"
-  "argocd|argocd-buck.omlabs.org|443|"
+  "argocd|argocd.focuscell.org|443|"
   "gitlab|git.developerdojo.org|443|"
   "fleet|fleet.focuspass.com|443|"
   "studio-hardmagic|studio.hardmagic.com|443|"
@@ -146,11 +146,11 @@ SERVICES=(
 # OpenClaw services — restricted to #openclaw-admin only, NOT #internal-services.
 # Format: "service_name|intercept_hostname|port|host_config|service_attribute"
 OPENCLAW_SERVICES=(
-  "openclaw-dashboard|agents-buck.omlabs.org|443||openclaw-services"
+  "openclaw-dashboard|agents.focuschef.com|443||openclaw-services"
   "openclaw-admin|admin.focuschef.com|443||openclaw-services"
-  "openclaw-hira|hira-buck.omlabs.org|443||openclaw-services"
-  "openclaw-lisa|lisa-buck.omlabs.org|443||openclaw-services"
-  "openclaw-cody|cody-buck.omlabs.org|443||openclaw-services"
+  "openclaw-hira|hira.focuschef.com|443||openclaw-services"
+  "openclaw-lisa|lisa.focuschef.com|443||openclaw-services"
+  "openclaw-cody|cody.focuschef.com|443||openclaw-services"
 )
 
 # Service-to-group mapping for role-based access:

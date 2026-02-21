@@ -1,8 +1,12 @@
 # ArgoCD Applications for OpenZiti on buck-lab.
-# These use multi-source: upstream Helm chart + our values from Gitea.
+# These use multi-source: upstream Helm chart + our values from GitHub.
+#
+# NOTE: These definitions are now managed via the registry repo
+# (FocusApiary/registry argocd/clusters/buck-lab/apps/). This file is
+# kept as a reference only.
 #
 # Prerequisites:
-#   - ArgoCD must have the Gitea repo registered
+#   - ArgoCD must have the GitHub repo registered
 #   - ArgoCD must have the openziti Helm repo registered
 #
 # Apply once:  kubectl apply -f k8s/argocd/buck-lab.yaml
@@ -24,7 +28,7 @@ spec:
         valueFiles:
           - $values/k8s/controller/values.yaml
           - $values/k8s/controller/overlays/buck-lab/values.yaml
-    - repoURL: https://gitea.buck-lab-k8s.omlabs.org/om-labs/ziti.git
+    - repoURL: git@github.com:FocusApiary/ziti.git
       targetRevision: main
       ref: values
   destination:
@@ -54,7 +58,7 @@ spec:
         valueFiles:
           - $values/k8s/router/values.yaml
           - $values/k8s/router/overlays/buck-lab/values.yaml
-    - repoURL: https://gitea.buck-lab-k8s.omlabs.org/om-labs/ziti.git
+    - repoURL: git@github.com:FocusApiary/ziti.git
       targetRevision: main
       ref: values
   destination:
