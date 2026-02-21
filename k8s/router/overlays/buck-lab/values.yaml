@@ -26,3 +26,9 @@ imagePullSecrets:
 # Enrollment JWT is sourced from AKV via ESO.
 enrollmentJwtFromSecret: true
 enrollmentJwtSecretName: ziti-router-buck-lab-router-01-jwt
+
+# Chart defaults ZITI_ROUTER_NAME to release name ("ziti-router"), but the
+# existing edge-router identity is "buck-lab-router-01". Override to keep
+# enrollment JWT and router identity aligned.
+env:
+  ZITI_ROUTER_NAME: buck-lab-router-01
