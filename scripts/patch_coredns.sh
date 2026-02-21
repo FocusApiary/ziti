@@ -15,6 +15,7 @@ set -euo pipefail
 #
 # Required entries (all point to Envoy Gateway proxy ClusterIP):
 #   auth.focuspass.com        — Keycloak OIDC, needed by Coder/Slidee/ArgoCD/GitLab
+#   ziti-router.focuspass.com — OpenZiti edge router (TLS passthrough via Envoy Gateway)
 #   argocd.focuscell.org      — ArgoCD, needed by GitLab webhooks
 #   longhorn.focuscell.org    — Longhorn UI
 #   s3.focuscell.org          — SeaweedFS S3 API endpoint
@@ -41,6 +42,7 @@ INGRESS_SVC="${INGRESS_SVC:-envoy-envoy-gateway-system-main-b3b376e9}"
 # Hostnames to add (all resolve to the Envoy Gateway proxy ClusterIP).
 HOSTS=(
   "auth.focuspass.com"
+  "ziti-router.focuspass.com"
   "argocd.focuscell.org"
   "longhorn.focuscell.org"
   "s3.focuscell.org"
