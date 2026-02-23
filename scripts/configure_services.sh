@@ -153,6 +153,7 @@ SERVICES=(
   "argocd|argocd.focuscell.org|443|"
   "gitlab|git.developerdojo.org|443|"
   "fleet|fleet.focuspass.com|443|"
+  "draw-hardmagic|draw.hardmagic.com|443|"
   "studio-hardmagic|studio.hardmagic.com|443|"
   "api-studio-hardmagic|api.studio.hardmagic.com|443|"
   "studio-hypersight|studio.hypersight.net|443|"
@@ -189,6 +190,7 @@ declare -A SERVICE_GROUP=(
   [argocd]=dev-services
   [gitlab]=dev-services
   [fleet]=core-services
+  [draw-hardmagic]=core-services
   [studio-hardmagic]=core-services
   [api-studio-hardmagic]=core-services
   [studio-hypersight]=core-services

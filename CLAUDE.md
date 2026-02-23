@@ -44,6 +44,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 | coder | developerdojo.org | 443 | Main Coder UI |
 | coder-wildcard | *.developerdojo.org | 443 | KasmVNC/filebrowser subdomains |
 | fleet | fleet.focuspass.com | 443 | |
+| draw-hardmagic | draw.hardmagic.com | 443 | Excalidraw whiteboard |
 | studio-hardmagic | studio.hardmagic.com | 443 | |
 | api-studio-hardmagic | api.studio.hardmagic.com | 443 | |
 | studio-hypersight | studio.hypersight.net | 443 | |
