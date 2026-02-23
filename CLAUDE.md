@@ -65,6 +65,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 | longhorn | longhorn.focuscell.org | 443 | |
 | seaweedfs-api | s3.focuscell.org | 443 | |
 | seaweedfs-console | files.focuscell.org | 443 | |
+| k8s-api | api.buck-lab.focuscell.org | 6443 | TLS passthrough to K8s API server |
 
 ### VoIP Services (attribute: #voip-services)
 
@@ -84,10 +85,11 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 | openclaw-lisa | lisa.focuschef.com | 443 | Recruitment agent |
 | openclaw-cody | cody.focuschef.com | 443 | Engineering agent |
 
-### Ziti Configs (25)
+### Ziti Configs (27)
 
 - 1 shared `host.v1` (ingress-host) — routes to Envoy Gateway ClusterIP:443
-- 24 `intercept.v1` configs — one per service hostname
+- 1 `host.v1` (k8s-api-host) — routes to Envoy Gateway ClusterIP:6443
+- 25 `intercept.v1` configs — one per service hostname
 
 ### Ziti Policies (10 service-policies, 1 edge-router-policy, 5 service-edge-router-policies)
 

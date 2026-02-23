@@ -131,6 +131,14 @@ ziti_exec "create config ingress-host host.v1 '{
   \"port\": 443
 }'"
 
+# 1b. K8s API host.v1 — TLS passthrough on port 6443 (separate from HTTPS 443).
+log "Creating host.v1 config: k8s-api-host"
+ziti_exec "create config k8s-api-host host.v1 '{
+  \"protocol\": \"tcp\",
+  \"address\": \"envoy-main-lan-vip.envoy-gateway-system.svc\",
+  \"port\": 6443
+}'"
+
 # ============================================================================
 # Phase 2: Intercept configs + services
 # ============================================================================
@@ -161,6 +169,7 @@ SERVICES=(
   "pbx-admin|admin.focuscell.org|443|"
   "pbx-webrtc|pbx.focuscell.org|443|"
   "pbx-api|api.focuscell.org|443|"
+  "k8s-api|api.buck-lab.focuscell.org|6443|k8s-api-host"
 )
 
 # OpenClaw services — restricted to #openclaw-admin only, NOT #internal-services.
@@ -199,6 +208,7 @@ declare -A SERVICE_GROUP=(
   [pbx-admin]=voip-services
   [pbx-webrtc]=voip-services
   [pbx-api]=voip-services
+  [k8s-api]=cluster-services
 )
 
 for entry in "${SERVICES[@]}"; do
@@ -373,4 +383,4 @@ else
 fi
 
 echo ""
-log "Done — expected: 25 configs, 24 services, 10 service-policies, 1 edge-router-policy, 5 service-edge-router-policies"
+log "Done — expected: 27 configs, 25 services, 10 service-policies, 1 edge-router-policy, 5 service-edge-router-policies"
