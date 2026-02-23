@@ -312,6 +312,12 @@ ziti_exec "create service-policy dial-cluster-services Dial \
   --service-roles '#cluster-services' \
   --semantic AnyOf"
 
+log "Creating service-policy: dial-cluster-watcher (Dial — devops watchers)"
+ziti_exec "create service-policy dial-cluster-watcher Dial \
+  --identity-roles '#devops-watcher' \
+  --service-roles '#cluster-services' \
+  --semantic AnyOf"
+
 log "Creating service-policy: dial-openclaw (Dial — openclaw admins)"
 ziti_exec "create service-policy dial-openclaw Dial \
   --identity-roles '#openclaw-admin' \
@@ -383,4 +389,4 @@ else
 fi
 
 echo ""
-log "Done — expected: 27 configs, 25 services, 10 service-policies, 1 edge-router-policy, 5 service-edge-router-policies"
+log "Done — expected: 27 configs, 25 services, 11 service-policies, 1 edge-router-policy, 5 service-edge-router-policies"

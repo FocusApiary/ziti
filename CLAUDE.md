@@ -91,7 +91,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 - 1 `host.v1` (k8s-api-host) — routes to Envoy Gateway ClusterIP:6443
 - 25 `intercept.v1` configs — one per service hostname
 
-### Ziti Policies (10 service-policies, 1 edge-router-policy, 5 service-edge-router-policies)
+### Ziti Policies (11 service-policies, 1 edge-router-policy, 5 service-edge-router-policies)
 
 - **bind-core-services** (Bind) — `#routers` -> `#core-services`
 - **bind-dev-services** (Bind) — `#routers` -> `#dev-services`
@@ -101,6 +101,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 - **dial-core-services** (Dial) — `#member` -> `#core-services`
 - **dial-dev-services** (Dial) — `#engineering` -> `#dev-services`
 - **dial-cluster-services** (Dial) — `#infra-admin` -> `#cluster-services`
+- **dial-cluster-watcher** (Dial) — `#devops-watcher` -> `#cluster-services`
 - **dial-openclaw** (Dial) — `#openclaw-admin` -> `#openclaw-services`
 - **dial-voip-services** (Dial) — `#member` -> `#voip-services`
 - **all-members-all-routers** (edge-router-policy) — `#member` -> `#all` routers
