@@ -161,6 +161,7 @@ SERVICES=(
   "argocd|argocd.focuscell.org|443|"
   "gitlab|git.developerdojo.org|443|"
   "fleet|fleet.focuspass.com|443|"
+  "grafana|grafana.focuscell.org|443|"
   "draw-hardmagic|draw.hardmagic.com|443|"
   "excalidraw-collab|collab.hardmagic.com|443|"
   "studio-hardmagic|studio.hardmagic.com|443|"
@@ -200,6 +201,7 @@ declare -A SERVICE_GROUP=(
   [argocd]=dev-services
   [gitlab]=dev-services
   [fleet]=core-services
+  [grafana]=core-services
   [draw-hardmagic]=core-services
   [excalidraw-collab]=core-services
   [studio-hardmagic]=core-services
@@ -312,10 +314,10 @@ ziti_exec "create service-policy dial-cluster-services Dial \
   --service-roles '#cluster-services' \
   --semantic AnyOf"
 
-log "Creating service-policy: dial-cluster-watcher (Dial — devops watchers)"
+log "Creating service-policy: dial-cluster-watcher (Dial — devops watchers, k8s-api only)"
 ziti_exec "create service-policy dial-cluster-watcher Dial \
   --identity-roles '#devops-watcher' \
-  --service-roles '#cluster-services' \
+  --service-roles '@k8s-api' \
   --semantic AnyOf"
 
 log "Creating service-policy: dial-openclaw (Dial — openclaw admins)"
@@ -389,4 +391,4 @@ else
 fi
 
 echo ""
-log "Done — expected: 27 configs, 25 services, 11 service-policies, 1 edge-router-policy, 5 service-edge-router-policies"
+log "Done — expected: 29 configs, 26 services, 11 service-policies, 1 edge-router-policy, 5 service-edge-router-policies"

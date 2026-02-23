@@ -44,6 +44,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 | coder | developerdojo.org | 443 | Main Coder UI |
 | coder-wildcard | *.developerdojo.org | 443 | KasmVNC/filebrowser subdomains |
 | fleet | fleet.focuspass.com | 443 | |
+| grafana | grafana.focuscell.org | 443 | Monitoring dashboards (OIDC role mapping) |
 | draw-hardmagic | draw.hardmagic.com | 443 | Excalidraw whiteboard |
 | excalidraw-collab | collab.hardmagic.com | 443 | Excalidraw real-time collab |
 | studio-hardmagic | studio.hardmagic.com | 443 | |
@@ -85,11 +86,11 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 | openclaw-lisa | lisa.focuschef.com | 443 | Recruitment agent |
 | openclaw-cody | cody.focuschef.com | 443 | Engineering agent |
 
-### Ziti Configs (27)
+### Ziti Configs (29)
 
 - 1 shared `host.v1` (ingress-host) — routes to Envoy Gateway ClusterIP:443
 - 1 `host.v1` (k8s-api-host) — routes to Envoy Gateway ClusterIP:6443
-- 25 `intercept.v1` configs — one per service hostname
+- 26 `intercept.v1` configs — one per service hostname
 
 ### Ziti Policies (11 service-policies, 1 edge-router-policy, 5 service-edge-router-policies)
 
@@ -101,7 +102,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 - **dial-core-services** (Dial) — `#member` -> `#core-services`
 - **dial-dev-services** (Dial) — `#engineering` -> `#dev-services`
 - **dial-cluster-services** (Dial) — `#infra-admin` -> `#cluster-services`
-- **dial-cluster-watcher** (Dial) — `#devops-watcher` -> `#cluster-services`
+- **dial-cluster-watcher** (Dial) — `#devops-watcher` -> `@k8s-api`
 - **dial-openclaw** (Dial) — `#openclaw-admin` -> `#openclaw-services`
 - **dial-voip-services** (Dial) — `#member` -> `#voip-services`
 - **all-members-all-routers** (edge-router-policy) — `#member` -> `#all` routers
