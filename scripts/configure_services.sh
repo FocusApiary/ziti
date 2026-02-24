@@ -365,10 +365,71 @@ ziti_exec "create service-edge-router-policy voip-all-routers \
   --edge-router-roles '#all'"
 
 # ============================================================================
-# Phase 5: Verification
+# Phase 5: Per-Node Talos API Services
 # ============================================================================
 
-log "--- Phase 5: Verification ---"
+log "--- Phase 5: Per-Node Talos API Services ---"
+
+# Each node gets a dedicated Talos API service so operators can reach
+# nodes via Ziti hostnames (e.g., talos-t460-119.ziti.focuscell.org:50000)
+# instead of hardcoded IPs. Each node's ziti-edge-tunnel binds its own service.
+
+NODE_NAMES=(
+  "talos-t460-119"
+  "talos-t460-129"
+  "talos-t460-139"
+  "talos-gpu-worker-4"
+  "talos-gpu-worker-5"
+  "talos-gpu-worker-6"
+)
+
+for node in "${NODE_NAMES[@]}"; do
+  log "Creating Talos API service for ${node}"
+
+  # host.v1 — forward to localhost:50000 (Talos API on the node itself)
+  ziti_exec "create config ${node}-talosapi-host host.v1 '{
+    \"protocol\": \"tcp\",
+    \"address\": \"localhost\",
+    \"port\": 50000
+  }'"
+
+  # intercept.v1 — operator intercepts <node>.ziti.focuscell.org:50000
+  ziti_exec "create config ${node}-talosapi-intercept intercept.v1 '{
+    \"protocols\": [\"tcp\"],
+    \"addresses\": [\"${node}.ziti.focuscell.org\"],
+    \"portRanges\": [{\"low\": 50000, \"high\": 50000}]
+  }'"
+
+  # Service with attribute #node-services
+  ziti_exec "create service ${node}-talosapi \
+    -c ${node}-talosapi-intercept,${node}-talosapi-host \
+    -a node-services"
+
+  # Bind policy — only the node's own identity binds its service
+  ziti_exec "create service-policy bind-node-${node} Bind \
+    --identity-roles '@${node}-node' \
+    --service-roles '@${node}-talosapi' \
+    --semantic AnyOf"
+done
+
+# Shared dial policy — infra-admin can dial all node services
+log "Creating service-policy: dial-node-services (Dial — infra admins)"
+ziti_exec "create service-policy dial-node-services Dial \
+  --identity-roles '#infra-admin' \
+  --service-roles '#node-services' \
+  --semantic AnyOf"
+
+# Service edge router policy — node services use all routers
+log "Creating service-edge-router-policy: node-all-routers"
+ziti_exec "create service-edge-router-policy node-all-routers \
+  --service-roles '#node-services' \
+  --edge-router-roles '#all'"
+
+# ============================================================================
+# Phase 6: Verification
+# ============================================================================
+
+log "--- Phase 6: Verification ---"
 
 if [[ -z "$DRY_RUN" ]]; then
   echo ""
@@ -391,4 +452,4 @@ else
 fi
 
 echo ""
-log "Done — expected: 29 configs, 26 services, 11 service-policies, 1 edge-router-policy, 5 service-edge-router-policies"
+log "Done — expected: 41 configs, 32 services, 18 service-policies, 1 edge-router-policy, 6 service-edge-router-policies"
