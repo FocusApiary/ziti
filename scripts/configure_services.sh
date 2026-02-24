@@ -419,6 +419,12 @@ ziti_exec "create service-policy dial-node-services Dial \
   --service-roles '#node-services' \
   --semantic AnyOf"
 
+# Edge router policy — node identities can reach routers (needed to bind)
+log "Creating edge-router-policy: nodes-all-routers"
+ziti_exec "create edge-router-policy nodes-all-routers \
+  --identity-roles '#nodes' \
+  --edge-router-roles '#all'"
+
 # Service edge router policy — node services use all routers
 log "Creating service-edge-router-policy: node-all-routers"
 ziti_exec "create service-edge-router-policy node-all-routers \
