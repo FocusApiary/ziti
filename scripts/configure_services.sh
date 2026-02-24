@@ -131,11 +131,11 @@ ziti_exec "create config ingress-host host.v1 '{
   \"port\": 443
 }'"
 
-# 1b. K8s API host.v1 — TLS passthrough on port 6443 (separate from HTTPS 443).
+# 1b. K8s API host.v1 — each control-plane node binds localhost:6443 directly.
 log "Creating host.v1 config: k8s-api-host"
 ziti_exec "create config k8s-api-host host.v1 '{
   \"protocol\": \"tcp\",
-  \"address\": \"envoy-main-lan-vip.envoy-gateway-system.svc\",
+  \"address\": \"localhost\",
   \"port\": 6443
 }'"
 
@@ -170,7 +170,7 @@ SERVICES=(
   "pbx-admin|admin.focuscell.org|443|"
   "pbx-webrtc|pbx.focuscell.org|443|"
   "pbx-api|api.focuscell.org|443|"
-  "k8s-api|api.buck-lab.focuscell.org|6443|k8s-api-host"
+  "k8s-api|api.buck-lab.ziti.focuscell.org|6443|k8s-api-host"
 )
 
 # OpenClaw services — restricted to #openclaw-admin only, NOT #internal-services.
@@ -432,10 +432,27 @@ ziti_exec "create service-edge-router-policy node-all-routers \
   --edge-router-roles '#all'"
 
 # ============================================================================
-# Phase 6: Verification
+# Phase 6: Kubernetes API — Control-Plane Node Binding
 # ============================================================================
 
-log "--- Phase 6: Verification ---"
+log "--- Phase 6: K8s API control-plane node binding ---"
+
+# The k8s-api service is defined in Phase 2 (cluster-services group).
+# Unlike HTTPS services that route via Envoy Gateway, the K8s API is bound
+# directly by each control-plane node identity (localhost:6443). Ziti
+# load-balances across all 3 terminators automatically.
+
+log "Creating service-policy: bind-kube-api (Bind — control-plane nodes)"
+ziti_exec "create service-policy bind-kube-api Bind \
+  --identity-roles '#controlplanes' \
+  --service-roles '@k8s-api' \
+  --semantic AnyOf"
+
+# ============================================================================
+# Phase 7: Verification
+# ============================================================================
+
+log "--- Phase 7: Verification ---"
 
 if [[ -z "$DRY_RUN" ]]; then
   echo ""
@@ -458,4 +475,4 @@ else
 fi
 
 echo ""
-log "Done — expected: 41 configs, 32 services, 18 service-policies, 1 edge-router-policy, 6 service-edge-router-policies"
+log "Done — expected: 41 configs, 32 services, 19 service-policies, 2 edge-router-policies, 6 service-edge-router-policies"
