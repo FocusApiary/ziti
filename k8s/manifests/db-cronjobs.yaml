@@ -1,0 +1,122 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ziti-db-snapshot-daily
+  namespace: ziti
+spec:
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 604800
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 2171
+            runAsGroup: 2171
+            runAsNonRoot: true
+          containers:
+            - name: snapshot
+              image: harbor.focuscell.org/openziti/ziti-controller:1.7.2
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "/scripts/db-maintenance.sh", "snapshot"]
+              env:
+                - name: ZITI_CONTROLLER_URL
+                  value: "https://ziti.focuspass.com:443"
+                - name: ZITI_ADMIN_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: ziti-controller-admin-secret
+                      key: admin-user
+                - name: ZITI_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ziti-controller-admin-secret
+                      key: admin-password
+              resources:
+                requests:
+                  cpu: 30m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                seccompProfile:
+                  type: RuntimeDefault
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: ziti-ops-automation-scripts
+                defaultMode: 0555
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ziti-db-integrity-weekly
+  namespace: ziti
+spec:
+  schedule: "47 3 * * 0"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 1209600
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 2171
+            runAsGroup: 2171
+            runAsNonRoot: true
+          containers:
+            - name: integrity
+              image: harbor.focuscell.org/openziti/ziti-controller:1.7.2
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "/scripts/db-maintenance.sh", "integrity"]
+              env:
+                - name: ZITI_CONTROLLER_URL
+                  value: "https://ziti.focuspass.com:443"
+                - name: ZITI_ADMIN_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: ziti-controller-admin-secret
+                      key: admin-user
+                - name: ZITI_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ziti-controller-admin-secret
+                      key: admin-password
+              resources:
+                requests:
+                  cpu: 30m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                seccompProfile:
+                  type: RuntimeDefault
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: ziti-ops-automation-scripts
+                defaultMode: 0555

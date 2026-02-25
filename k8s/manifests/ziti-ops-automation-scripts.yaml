@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ziti-ops-automation-scripts
+  namespace: ziti
+data:
+  db-maintenance.sh: |
+    #!/bin/sh
+    set -eu
+
+    action="${1:-snapshot}"
+    controller="${ZITI_CONTROLLER_URL:-https://ziti.focuspass.com:443}"
+
+    log_json() {
+      printf '{"ts":"%s","component":"ziti-db-maintenance","action":"%s","msg":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$action" "$1"
+    }
+
+    attempt=1
+    max_attempts=12
+    while [ "$attempt" -le "$max_attempts" ]; do
+      if ziti edge login "$controller" -u "$ZITI_ADMIN_USER" -p "$ZITI_ADMIN_PASSWORD" -y >/tmp/login.out 2>&1; then
+        log_json "login_ok"
+        break
+      fi
+      cat /tmp/login.out || true
+      log_json "login_retry_${attempt}"
+      attempt=$((attempt+1))
+      sleep 10
+    done
+
+    if [ "$attempt" -gt "$max_attempts" ]; then
+      log_json "login_failed"
+      exit 1
+    fi
+
+    case "$action" in
+      snapshot)
+        log_json "snapshot_start"
+        ziti edge db snapshot >/tmp/snapshot.out 2>&1 || {
+          cat /tmp/snapshot.out
+          log_json "snapshot_failed"
+          exit 1
+        }
+        cat /tmp/snapshot.out || true
+        log_json "snapshot_done"
+        ;;
+      integrity)
+        log_json "integrity_start"
+        ziti edge db start-check-integrity >/tmp/integrity-start.out 2>&1 || {
+          cat /tmp/integrity-start.out
+          log_json "integrity_start_failed"
+          exit 1
+        }
+        cat /tmp/integrity-start.out || true
+        sleep 30
+        ziti edge db check-integrity-status >/tmp/integrity-status.out 2>&1 || true
+        cat /tmp/integrity-status.out || true
+        log_json "integrity_status_logged"
+        ;;
+      *)
+        log_json "unknown_action"
+        exit 2
+        ;;
+    esac
+  event-stream.sh: |
+    #!/bin/sh
+    set -eu
+
+    controller="${ZITI_CONTROLLER_URL:-https://ziti.focuspass.com:443}"
+
+    log_json() {
+      printf '{"ts":"%s","component":"ziti-audit-event-stream","msg":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
+    }
+
+    while true; do
+      if ziti edge login "$controller" -u "$ZITI_ADMIN_USER" -p "$ZITI_ADMIN_PASSWORD" --read-only -y >/dev/null 2>&1; then
+        log_json "login_ok"
+      else
+        log_json "login_failed"
+        sleep 15
+        continue
+      fi
+
+      log_json "stream_start"
+      if ! ziti fabric stream events \
+        --entity-change \
+        --api-sessions \
+        --sessions \
+        --connect \
+        --services \
+        --routers \
+        --usage \
+        --usage-version 3 \
+        -j; then
+        log_json "stream_disconnected"
+      fi
+
+      sleep 5
+    done
