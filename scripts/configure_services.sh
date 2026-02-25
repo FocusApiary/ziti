@@ -219,9 +219,16 @@ for entry in "${SERVICES[@]}"; do
   intercept_cfg="${name}-intercept"
   svc_group="${SERVICE_GROUP[$name]:-core-services}"
 
-  log "Creating intercept config + service: $name ($hostname:$port) [#${svc_group}]"
+  log "Creating/updating intercept config + service: $name ($hostname:$port) [#${svc_group}]"
 
   ziti_exec "create config ${intercept_cfg} intercept.v1 '{
+    \"protocols\": [\"tcp\"],
+    \"addresses\": [\"${hostname}\"],
+    \"portRanges\": [{\"low\": ${port}, \"high\": ${port}}]
+  }'"
+
+  # Update existing configs to ensure hostnames stay current (create skips existing).
+  ziti_exec "update config ${intercept_cfg} -d '{
     \"protocols\": [\"tcp\"],
     \"addresses\": [\"${hostname}\"],
     \"portRanges\": [{\"low\": ${port}, \"high\": ${port}}]
@@ -237,9 +244,16 @@ for entry in "${OPENCLAW_SERVICES[@]}"; do
   host_cfg="${host_cfg:-ingress-host}"
   intercept_cfg="${name}-intercept"
 
-  log "Creating intercept config + service: $name ($hostname:$port) [restricted: #$svc_attr]"
+  log "Creating/updating intercept config + service: $name ($hostname:$port) [restricted: #$svc_attr]"
 
   ziti_exec "create config ${intercept_cfg} intercept.v1 '{
+    \"protocols\": [\"tcp\"],
+    \"addresses\": [\"${hostname}\"],
+    \"portRanges\": [{\"low\": ${port}, \"high\": ${port}}]
+  }'"
+
+  # Update existing configs to ensure hostnames stay current.
+  ziti_exec "update config ${intercept_cfg} -d '{
     \"protocols\": [\"tcp\"],
     \"addresses\": [\"${hostname}\"],
     \"portRanges\": [{\"low\": ${port}, \"high\": ${port}}]
@@ -381,6 +395,7 @@ NODE_NAMES=(
   "talos-gpu-worker-4"
   "talos-gpu-worker-5"
   "talos-gpu-worker-6"
+  "talos-t460-remote"
 )
 
 for node in "${NODE_NAMES[@]}"; do
@@ -475,4 +490,4 @@ else
 fi
 
 echo ""
-log "Done — expected: 41 configs, 32 services, 19 service-policies, 2 edge-router-policies, 6 service-edge-router-policies"
+log "Done — expected: 43 configs, 33 services, 20 service-policies, 2 edge-router-policies, 6 service-edge-router-policies"
