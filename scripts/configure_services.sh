@@ -20,6 +20,47 @@ CTRL_MGMT_PORT="${CTRL_MGMT_PORT:-1280}"
 ROUTER_IDENTITY="${ZITI_ROUTER_IDENTITY:-buck-lab-router-01}"
 AKV_NAME="${AKV_NAME:-omlab-secrets}"
 
+# ---------- inventory --------------------------------------------------------
+
+INVENTORY_FILE="${INVENTORY_FILE:-}"
+if [[ -z "$INVENTORY_FILE" ]]; then
+  # Default: sibling talos repo (relative to ROOT_DIR)
+  if [[ -f "$ROOT_DIR/../talos/datacenter/usb-creator/inventory.conf" ]]; then
+    INVENTORY_FILE="$ROOT_DIR/../talos/datacenter/usb-creator/inventory.conf"
+  elif [[ -f "$ROOT_DIR/inventory.conf" ]]; then
+    INVENTORY_FILE="$ROOT_DIR/inventory.conf"
+  else
+    echo "ERROR: inventory.conf not found. Set INVENTORY_FILE or create symlink." >&2
+    exit 1
+  fi
+fi
+
+# Parse inventory.conf into parallel arrays.
+# Optional arg: site filter (only include nodes from that site).
+INV_NAMES=()
+INV_IPS=()
+INV_ROLES=()
+INV_SITES=()
+INV_INSTALLERS=()
+parse_inventory() {
+  local site_filter="${1:-}"
+  INV_NAMES=(); INV_IPS=(); INV_ROLES=(); INV_SITES=(); INV_INSTALLERS=()
+  while IFS=: read -r name ip role site installer; do
+    [[ -z "$name" || "$name" == \#* ]] && continue
+    if [[ -n "$site_filter" && "$site" != "$site_filter" ]]; then
+      continue
+    fi
+    INV_NAMES+=("$name")
+    INV_IPS+=("$ip")
+    INV_ROLES+=("$role")
+    INV_SITES+=("$site")
+    INV_INSTALLERS+=("$installer")
+  done < "$INVENTORY_FILE"
+}
+
+parse_inventory "${SITE_FILTER:-}"
+NODE_COUNT=${#INV_NAMES[@]}
+
 # ---------- helpers ----------------------------------------------------------
 
 log() { printf '[%s] ==> %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
@@ -116,6 +157,8 @@ else
   CTRL_POD="(dry-run)"
   log "DRY_RUN mode — printing commands only"
 fi
+
+log "Loaded ${NODE_COUNT} nodes from inventory (${INVENTORY_FILE})"
 
 # ============================================================================
 # Phase 1: Configs
@@ -387,18 +430,9 @@ log "--- Phase 5: Per-Node Talos API Services ---"
 # Each node gets a dedicated Talos API service so operators can reach
 # nodes via Ziti hostnames (e.g., talos-t460-119.ziti.focuscell.org:50000)
 # instead of hardcoded IPs. Each node's ziti-edge-tunnel binds its own service.
+# Node list is driven by inventory.conf.
 
-NODE_NAMES=(
-  "talos-t460-119"
-  "talos-t460-129"
-  "talos-t460-139"
-  "talos-gpu-worker-4"
-  "talos-gpu-worker-5"
-  "talos-gpu-worker-6"
-  "talos-t460-remote"
-)
-
-for node in "${NODE_NAMES[@]}"; do
+for node in "${INV_NAMES[@]}"; do
   log "Creating Talos API service for ${node}"
 
   # host.v1 — forward to localhost:50000 (Talos API on the node itself)
@@ -463,12 +497,12 @@ ziti_exec "create service-policy bind-kube-api Bind \
   --service-roles '@k8s-api' \
   --semantic AnyOf"
 
-# Remote worker nodes need to dial the K8s API via Ziti when off the LAN.
+# All nodes need to dial the K8s API via Ziti in a multi-site topology.
 # ext-openziti in "run" mode intercepts connections to api.buck-lab.ziti.focuscell.org
 # and routes them through the Ziti overlay to the control plane terminators.
-log "Creating service-policy: dial-remote-kube-api (Dial — remote workers)"
-ziti_exec "create service-policy dial-remote-kube-api Dial \
-  --identity-roles '@talos-t460-remote-node' \
+log "Creating service-policy: dial-nodes-kube-api (Dial — all nodes)"
+ziti_exec "create service-policy dial-nodes-kube-api Dial \
+  --identity-roles '#nodes' \
   --service-roles '@k8s-api' \
   --semantic AnyOf"
 
@@ -498,5 +532,16 @@ else
   log "(verification skipped in dry-run mode)"
 fi
 
+# Dynamic counts based on inventory:
+#   Configs:  30 static (ingress-host, k8s-api-host, 23 intercept, 5 openclaw-intercept)
+#             + NODE_COUNT * 2 (host + intercept per node)
+#   Services: 28 static (23 + 5 openclaw) + NODE_COUNT
+#   Service-policies: 13 static + NODE_COUNT (per-node bind) + 1 dial-node-services
+#   Edge-router-policies: 2 (all-members + nodes)
+#   Service-edge-router-policies: 6
+EXPECTED_CONFIGS=$((30 + NODE_COUNT * 2))
+EXPECTED_SERVICES=$((28 + NODE_COUNT))
+EXPECTED_SP=$((14 + NODE_COUNT))
+
 echo ""
-log "Done — expected: 43 configs, 33 services, 20 service-policies, 2 edge-router-policies, 6 service-edge-router-policies"
+log "Done — expected: ${EXPECTED_CONFIGS} configs, ${EXPECTED_SERVICES} services, ${EXPECTED_SP} service-policies, 2 edge-router-policies, 6 service-edge-router-policies (${NODE_COUNT} nodes)"
