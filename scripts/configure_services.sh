@@ -31,7 +31,7 @@ get_admin_password() {
     pw="$(az keyvault secret show \
       --vault-name "$AKV_NAME" \
       --name "ziti-admin-password" \
-      --query value -o tsv 2>/dev/null || true)"
+      --query value -o tsv 2>/dev/null | tr -d '\r' || true)"
   fi
 
   if [[ -n "$pw" ]]; then
@@ -460,6 +460,15 @@ log "--- Phase 6: K8s API control-plane node binding ---"
 log "Creating service-policy: bind-kube-api (Bind — control-plane nodes)"
 ziti_exec "create service-policy bind-kube-api Bind \
   --identity-roles '#controlplanes' \
+  --service-roles '@k8s-api' \
+  --semantic AnyOf"
+
+# Remote worker nodes need to dial the K8s API via Ziti when off the LAN.
+# ext-openziti in "run" mode intercepts connections to api.buck-lab.ziti.focuscell.org
+# and routes them through the Ziti overlay to the control plane terminators.
+log "Creating service-policy: dial-remote-kube-api (Dial — remote workers)"
+ziti_exec "create service-policy dial-remote-kube-api Dial \
+  --identity-roles '@talos-t460-remote-node' \
   --service-roles '@k8s-api' \
   --semantic AnyOf"
 
