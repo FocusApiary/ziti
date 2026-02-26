@@ -214,6 +214,8 @@ SERVICES=(
   "pbx-webrtc|pbx.focuscell.org|443|"
   "pbx-api|api.focuscell.org|443|"
   "k8s-api|api.buck-lab.ziti.focuscell.org|6443|k8s-api-host"
+  "focusmail-web|mail.focuscell.org|443|"
+  "focusmail-api|mail-api.focuscell.org|443|"
 )
 
 # OpenClaw services — restricted to #openclaw-admin only, NOT #internal-services.
@@ -254,6 +256,8 @@ declare -A SERVICE_GROUP=(
   [pbx-webrtc]=voip-services
   [pbx-api]=voip-services
   [k8s-api]=cluster-services
+  [focusmail-web]=core-services
+  [focusmail-api]=core-services
 )
 
 for entry in "${SERVICES[@]}"; do
@@ -533,14 +537,14 @@ else
 fi
 
 # Dynamic counts based on inventory:
-#   Configs:  30 static (ingress-host, k8s-api-host, 23 intercept, 5 openclaw-intercept)
+#   Configs:  32 static (ingress-host, k8s-api-host, 25 intercept, 5 openclaw-intercept)
 #             + NODE_COUNT * 2 (host + intercept per node)
-#   Services: 28 static (23 + 5 openclaw) + NODE_COUNT
+#   Services: 30 static (25 + 5 openclaw) + NODE_COUNT
 #   Service-policies: 13 static + NODE_COUNT (per-node bind) + 1 dial-node-services
 #   Edge-router-policies: 2 (all-members + nodes)
 #   Service-edge-router-policies: 6
-EXPECTED_CONFIGS=$((30 + NODE_COUNT * 2))
-EXPECTED_SERVICES=$((28 + NODE_COUNT))
+EXPECTED_CONFIGS=$((32 + NODE_COUNT * 2))
+EXPECTED_SERVICES=$((30 + NODE_COUNT))
 EXPECTED_SP=$((14 + NODE_COUNT))
 
 echo ""

@@ -57,6 +57,8 @@ HOSTS=(
   "admin.focuscell.org"
   "api.focuscell.org"
   "harbor.focuscell.org"
+  "mail.focuscell.org"
+  "mail-api.focuscell.org"
   "api.studio.hardmagic.com"
   "agents.focuschef.com"
   "admin.focuschef.com"
