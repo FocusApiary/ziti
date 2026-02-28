@@ -1,0 +1,53 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["local>FocusApiary/dot-github:renovate-default"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track OpenZiti image tags in Helm overlay values",
+      "fileMatch": ["^k8s/.+/overlays/.+/values\\.yaml$"],
+      "matchStrings": [
+        "repository:\\s*harbor\\.focuscell\\.org/openziti/(?<packageName>ziti-(?:controller|router))\\s*\\n\\s*tag:\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "openziti/ziti",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Track MetalLB version in deploy script",
+      "fileMatch": ["^scripts/deploy_metallb\\.sh$"],
+      "matchStrings": [
+        "METALLB_VERSION=\"\\$\\{METALLB_VERSION:-(?<currentValue>[^}]+)\\}\""
+      ],
+      "depNameTemplate": "metallb/metallb",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://metallb.github.io/metallb"
+    },
+    {
+      "customType": "regex",
+      "description": "Track Helm chart targetRevision in ArgoCD Application files",
+      "fileMatch": ["^k8s/argocd/.+\\.yaml$"],
+      "matchStrings": [
+        "chart:\\s*(?<depName>ziti-controller|ziti-router)\\s*\\n\\s*targetRevision:\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://docs.openziti.io/helm-charts/"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Automerge minor, patch, and digest updates with 3-day stabilization",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Group ziti-controller and ziti-router image tags together",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["k8s/*/overlays/*/values.yaml"],
+      "matchPackageNames": ["openziti/ziti"],
+      "groupName": "openziti image tags"
+    }
+  ]
+}

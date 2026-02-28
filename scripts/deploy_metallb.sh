@@ -74,8 +74,9 @@ kubectl apply -f "$ROOT_DIR/k8s/metallb/ip-pool.yaml"
 log "Verifying MetalLB resources"
 kubectl -n "$METALLB_NS" get ipaddresspool,l2advertisement
 
-LB_IP=$(kubectl -n envoy-gateway-system get svc envoy-envoy-gateway-system-main-b3b376e9 \
-  -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+LB_IP=$(kubectl -n envoy-gateway-system get svc \
+  -l "gateway.envoyproxy.io/owning-gateway-namespace=envoy-gateway-system" \
+  -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
 
 if [[ -n "$LB_IP" ]]; then
   log "Envoy Gateway LoadBalancer IP: $LB_IP"
