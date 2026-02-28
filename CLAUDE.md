@@ -4,6 +4,41 @@
 
 GitOps repo for OpenZiti ZTNA on buck-lab k8s. Controller + router deployed via Helm, images mirrored through Harbor, secrets in AKV `omlab-secrets`.
 
+## Upstream-First Policy
+
+We are a small team. Upstream is source of truth -- no questions asked.
+
+- **Renovate is mandatory** -- every dependency must be tracked with a version pin
+- All customizations are IaC: declarative, idempotent, git-driven
+- Allowed customizations: OIDC/auth, ingress/TLS, Helm values, native branding/theming, storage class, resource limits
+- No vendored upstream code, no fragile patches, no sidecars for branding
+- No version locks -- always track latest upstream
+- Automerge: minor+patch+digest with 3-day minimumReleaseAge
+- Org preset: `local>FocusApiary/dot-github:renovate-default`
+
+### What this repo tracks
+
+- **Upstream**: OpenZiti `ziti-controller` and `ziti-router` Helm charts (`https://docs.openziti.io/helm-charts/`)
+- **Container images**: `openziti/ziti-controller` and `openziti/ziti-router` (mirrored to Harbor)
+- **MetalLB**: Helm chart for bare-metal LoadBalancer
+
+### Allowed customizations
+
+- Helm values overlays (base + per-cluster in `k8s/<component>/overlays/<cluster>/values.yaml`)
+- Container hardening: runAsUser, seccomp, drop caps
+- Storage class, node placement
+- Image mirroring to Harbor
+- Controller + router image tags grouped together by Renovate
+
+### Renovate Config
+
+Custom managers track image tags in Helm overlay values, MetalLB version in deploy script, and chart `targetRevision` in ArgoCD Application files. Controller + router image tags are grouped. See `renovate.json` for full config.
+
+### ArgoCD
+
+- All ArgoCD Application `repoURL` fields MUST point to GitLab (`https://git.developerdojo.org/FocusApiary/ziti`), never GitHub
+- GitHub is for developer push only; GitLab mirrors from GitHub and is the source of truth for ArgoCD
+
 ## Deployment Strategy
 
 GitHub (source of truth) -> CI (lint + image sync to Harbor) -> ArgoCD or deploy script -> k8s.
