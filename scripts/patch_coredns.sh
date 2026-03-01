@@ -44,6 +44,7 @@ HOSTS=(
   "auth.focuspass.com"
   "ziti-router.focuspass.com"
   "argocd.focuscell.org"
+  "domains.focuscell.org"
   "longhorn.focuscell.org"
   "s3.focuscell.org"
   "files.focuscell.org"
