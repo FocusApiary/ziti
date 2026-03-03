@@ -19,6 +19,7 @@ set -euo pipefail
 #   3 = proxy started but endpoint checks failed
 
 IDENTITY=""
+EXT_JWT=""
 SERVICE="api-vllm-hardmagic"
 HOSTNAME="api.vllm.hardmagic.com"
 LOCAL_PORT="18443"
@@ -28,6 +29,7 @@ LOG_FILE="/tmp/vllm_edge_proxy.log"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --identity) IDENTITY="$2"; shift 2 ;;
+    --ext-jwt) EXT_JWT="$2"; shift 2 ;;
     --service) SERVICE="$2"; shift 2 ;;
     --host) HOSTNAME="$2"; shift 2 ;;
     --port) LOCAL_PORT="$2"; shift 2 ;;
@@ -39,18 +41,26 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$IDENTITY" ]]; then
-  echo "Missing required --identity path" >&2
+if [[ -z "$IDENTITY" && -z "$EXT_JWT" ]]; then
+  echo "Missing required auth input. Provide --identity or --ext-jwt." >&2
   exit 1
 fi
 
-if [[ ! -f "$IDENTITY" ]]; then
+if [[ -n "$IDENTITY" && ! -f "$IDENTITY" ]]; then
   echo "Identity file not found: $IDENTITY" >&2
   exit 1
 fi
 
 echo "[1/5] Authenticating with edge identity"
-ziti edge login "$ZITI_URL" -f "$IDENTITY" --yes >/dev/null
+if [[ -n "$EXT_JWT" ]]; then
+  if [[ ! -f "$EXT_JWT" ]]; then
+    echo "JWT file not found: $EXT_JWT" >&2
+    exit 1
+  fi
+  ziti edge login "$ZITI_URL" --ext-jwt "$EXT_JWT" --yes >/dev/null
+else
+  ziti edge login "$ZITI_URL" -f "$IDENTITY" --yes >/dev/null
+fi
 TOKEN="$(jq -r '.edgeIdentities.default.token' "$HOME/.config/ziti/ziti-cli.json")"
 API="https://${ZITI_URL}/edge/client/v1"
 
@@ -59,14 +69,37 @@ SESSION_JSON="$(curl -sk -H "zt-session: ${TOKEN}" "${API}/current-api-session")
 IDENTITY_NAME="$(jq -r '.data.identity.name // "<unknown>"' <<<"$SESSION_JSON")"
 IDENTITY_ATTRS="$(jq -c '.data.identity.roleAttributes' <<<"$SESSION_JSON")"
 
-SERVICES_JSON="$(curl -sk -H "zt-session: ${TOKEN}" "${API}/services")"
-if ! jq -e --arg svc "$SERVICE" '.data[] | select(.name == $svc)' <<<"$SERVICES_JSON" >/dev/null; then
+SERVICES_JSON='[]'
+LIMIT=200
+OFFSET=0
+TOTAL=1
+while (( OFFSET < TOTAL )); do
+  PAGE_JSON="$(curl -sk -H "zt-session: ${TOKEN}" "${API}/services?limit=${LIMIT}&offset=${OFFSET}")"
+  PAGE_DATA="$(jq -c '.data // []' <<<"$PAGE_JSON")"
+  SERVICES_JSON="$(jq -cs '.[0] + .[1]' <(printf '%s' "$SERVICES_JSON") <(printf '%s' "$PAGE_DATA"))"
+  TOTAL="$(jq -r '.meta.pagination.totalCount // ((.data // []) | length)' <<<"$PAGE_JSON")"
+  PAGE_COUNT="$(jq -r '(.data // []) | length' <<<"$PAGE_JSON")"
+  if (( PAGE_COUNT == 0 )); then
+    break
+  fi
+  OFFSET=$((OFFSET + PAGE_COUNT))
+done
+
+if ! jq -e --arg svc "$SERVICE" '.[] | select(.name == $svc)' <<<"$SERVICES_JSON" >/dev/null; then
   echo "Identity: ${IDENTITY_NAME}"
   echo "Role attributes: ${IDENTITY_ATTRS}"
   echo "Service '${SERVICE}' is not visible for this identity."
   echo "Accessible services:"
-  jq -r '.data[].name' <<<"$SERVICES_JSON" | sort
+  jq -r '.[].name' <<<"$SERVICES_JSON" | sort
   exit 2
+fi
+
+if [[ -z "$IDENTITY" ]]; then
+  echo "[3/5] Visibility-only mode complete (no identity file provided for proxy checks)"
+  echo "Identity: ${IDENTITY_NAME}"
+  echo "Role attributes: ${IDENTITY_ATTRS}"
+  echo "Service '${SERVICE}' is visible."
+  exit 0
 fi
 
 echo "[3/5] Starting ziti tunnel proxy for ${SERVICE}:${LOCAL_PORT}"

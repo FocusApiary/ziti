@@ -36,12 +36,19 @@ scripts/rotate_router_jwt.sh
 
 # Validate vLLM API access over Ziti edge identity
 scripts/validate_vllm_edge_access.sh --identity /etc/ziti/identities/matthew-laptop.json
+
+# Validate vLLM service visibility with Keycloak/OIDC JWT (no local identity file)
+scripts/validate_vllm_edge_access.sh --ext-jwt /tmp/seanh-openziti.jwt
 ```
 
 Validation exits:
 - `0`: `api-vllm-hardmagic` visible and `/health` + `/v1/models` pass over Ziti.
 - `2`: service not visible for identity (role/policy gap).
 - `3`: service visible but endpoint checks fail through proxy.
+
+Notes:
+- The validator now paginates `/edge/client/v1/services` to avoid false negatives on large service sets.
+- `--ext-jwt` runs visibility-only validation (proxy checks require `--identity`).
 
 ## Repo Layout
 
