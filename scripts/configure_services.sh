@@ -209,6 +209,7 @@ SERVICES=(
   "excalidraw-collab|collab.hardmagic.com|443|"
   "studio-hardmagic|studio.hardmagic.com|443|"
   "api-studio-hardmagic|api.studio.hardmagic.com|443|"
+  "api-vllm-hardmagic|api.vllm.hardmagic.com|443|"
   "studio-hypersight|studio.hypersight.net|443|"
   "pbx-admin|admin.focuscell.org|443|"
   "pbx-webrtc|pbx.focuscell.org|443|"
@@ -251,6 +252,7 @@ declare -A SERVICE_GROUP=(
   [excalidraw-collab]=core-services
   [studio-hardmagic]=core-services
   [api-studio-hardmagic]=core-services
+  [api-vllm-hardmagic]=core-services
   [studio-hypersight]=core-services
   [pbx-admin]=voip-services
   [pbx-webrtc]=voip-services

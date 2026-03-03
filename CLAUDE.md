@@ -84,6 +84,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 | excalidraw-collab | collab.hardmagic.com | 443 | Excalidraw real-time collab |
 | studio-hardmagic | studio.hardmagic.com | 443 | |
 | api-studio-hardmagic | api.studio.hardmagic.com | 443 | |
+| api-vllm-hardmagic | api.vllm.hardmagic.com | 443 | OpenAI-compatible vLLM API |
 | studio-hypersight | studio.hypersight.net | 443 | |
 
 ### Dev Services (attribute: #dev-services)
@@ -121,7 +122,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 | openclaw-lisa | lisa.focuschef.com | 443 | Recruitment agent |
 | openclaw-cody | cody.focuschef.com | 443 | Engineering agent |
 
-### Ziti Configs (29)
+### Ziti Configs (30)
 
 - 1 shared `host.v1` (ingress-host) — routes to Envoy Gateway ClusterIP:443
 - 1 `host.v1` (k8s-api-host) — routes to Envoy Gateway ClusterIP:6443

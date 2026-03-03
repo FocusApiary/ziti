@@ -28,6 +28,7 @@ set -euo pipefail
 #   admin.focuscell.org       — VoIP admin panel
 #   api.focuscell.org         — VoIP API + SignalWire SMS webhooks
 #   api.studio.hardmagic.com  — HardMagic Studio API
+#   api.vllm.hardmagic.com    — HardMagic vLLM API
 #   agents.focuschef.com      — OpenClaw dashboard
 #   admin.focuschef.com       — OpenClaw admin panel
 #   *.focuschef.com (25 agents) — Individual OpenClaw agent endpoints
@@ -61,6 +62,7 @@ HOSTS=(
   "mail.focuscell.org"
   "mail-api.focuscell.org"
   "api.studio.hardmagic.com"
+  "api.vllm.hardmagic.com"
   "agents.focuschef.com"
   "admin.focuschef.com"
   "angie.focuschef.com"
