@@ -33,7 +33,15 @@ scripts/store_secrets.sh
 
 # Rotate/reconcile router enrollment JWT (AKV + Kubernetes)
 scripts/rotate_router_jwt.sh
+
+# Validate vLLM API access over Ziti edge identity
+scripts/validate_vllm_edge_access.sh --identity /etc/ziti/identities/matthew-laptop.json
 ```
+
+Validation exits:
+- `0`: `api-vllm-hardmagic` visible and `/health` + `/v1/models` pass over Ziti.
+- `2`: service not visible for identity (role/policy gap).
+- `3`: service visible but endpoint checks fail through proxy.
 
 ## Repo Layout
 
