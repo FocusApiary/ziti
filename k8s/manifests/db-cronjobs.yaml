@@ -22,7 +22,7 @@ spec:
             runAsNonRoot: true
           containers:
             - name: snapshot
-              image: harbor.focuscell.org/openziti/ziti-controller:1.7.2
+              image: docker.io/openziti/ziti-controller:1.7.2
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "/scripts/db-maintenance.sh", "snapshot"]
               env:
@@ -83,7 +83,7 @@ spec:
             runAsNonRoot: true
           containers:
             - name: integrity
-              image: harbor.focuscell.org/openziti/ziti-controller:1.7.2
+              image: docker.io/openziti/ziti-controller:1.7.2
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "/scripts/db-maintenance.sh", "integrity"]
               env:
