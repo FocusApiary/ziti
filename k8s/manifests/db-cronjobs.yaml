@@ -8,7 +8,7 @@ spec:
   schedule: "17 3 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 0
   jobTemplate:
     spec:
       backoffLimit: 2
@@ -69,7 +69,7 @@ spec:
   schedule: "47 3 * * 0"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 0
   jobTemplate:
     spec:
       backoffLimit: 2
