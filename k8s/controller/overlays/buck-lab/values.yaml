@@ -23,3 +23,17 @@ imagePullSecrets:
 # Controller admin credentials are sourced from AKV via ESO.
 useCustomAdminSecret: true
 customAdminSecretName: ziti-controller-admin-secret
+
+# Let's Encrypt cert so tunneler clients trust the controller without
+# distributing a self-signed CA to every device.
+webBindingPki:
+  altServerCerts:
+    - mode: certManager
+      secretName: ziti-controller-le-server-cert
+      altDnsNames:
+        - ziti.focuspass.com
+      issuerRef:
+        group: cert-manager.io
+        kind: ClusterIssuer
+        name: letsencrypt-prod
+      mountPath: /etc/ziti/alt-server-cert
