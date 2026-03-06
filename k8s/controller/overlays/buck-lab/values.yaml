@@ -10,8 +10,8 @@ persistence:
   storageClass: longhorn-r2
 
 image:
-  repository: docker.io/openziti/ziti-controller
-  tag: "2.0.0-pre2"
+  repository: harbor.focuscell.org/infra/ziti-controller
+  tag: "2.0.0-pre2-patched"
 
 # Keep controller on storage nodes (persistent BoltDB).
 nodeSelector:
