@@ -195,7 +195,9 @@ ziti-router.focuspass.com  -> CNAME -> <dc-ddns-hostname>
 - CoreDNS hosts entry maps `ziti.focuspass.com` to controller ClusterIP for in-cluster enrollment
 - Controller must be fully up before router enrollment
 - Router enrollment JWT is one-time; the k8s secret preserves it for re-deploys
-- Chart versions: ziti-controller 3.0.0 (app 1.7.2), ziti-router 2.0.0 (app 1.7.2)
+- Chart versions: ziti-controller 3.0.0 (app 2.0.0-pre2), ziti-router 2.0.0 (app 2.0.0-pre2)
+- host.v1 `listenOptions`: `connectTimeoutSeconds: 30`, `precedence: required` — prevents SDK timeout under concurrent circuit creation
+- v2.0.0 CLI auth uses OIDC flow; use REST API (`POST /edge/management/v1/authenticate?method=password`) for automation
 - ArgoCD ingress requires `ssl-passthrough: "true"` (gRPC + HTTPS on same port)
 - Coder wildcard (`*.developerdojo.org`) enables subdomain-based workspace apps (KasmVNC, filebrowser)
 
@@ -205,3 +207,5 @@ ziti-router.focuspass.com  -> CNAME -> <dc-ddns-hostname>
 - trust-manager default trust namespace is cert-manager, not the release namespace — requires `app.trust.namespace=ziti`
 - Controller ClusterIP changes on reinstall — CoreDNS hosts entry must be updated
 - CF API token in AKV (`cloudflare-api-token`) lacks DNS record permissions for focuspass.com zone
+- tunnel.go `myCopy` receive direction logs router identity as `circuitId` — looks like zombie circuit but is harmless (upstream PR #3649)
+- sdk-golang v1.4.2 xgress EOF handling bug causes intermittent connection failures under concurrency (upstream PR #880, fix unreleased)

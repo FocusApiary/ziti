@@ -167,18 +167,29 @@ log "Loaded ${NODE_COUNT} nodes from inventory (${INVENTORY_FILE})"
 log "--- Phase 1: Configs ---"
 
 # 1a. Shared host.v1 — all HTTPS services route through Envoy Gateway proxy.
+# listenOptions.connectTimeoutSeconds raised to 30s (from default 5s) to prevent
+# SDK-side "timeout waiting for message reply" under concurrent circuit creation.
+# precedence=required ensures this is the authoritative host config.
 log "Creating/updating host.v1 config: ingress-host"
 ziti_exec "create config ingress-host host.v1 '{
   \"protocol\": \"tcp\",
   \"address\": \"envoy-main-lan-vip.envoy-gateway-system.svc\",
-  \"port\": 443
+  \"port\": 443,
+  \"listenOptions\": {
+    \"connectTimeoutSeconds\": 30,
+    \"precedence\": \"required\"
+  }
 }'"
 
-# Update existing host.v1 configs to ensure address stays current (create skips existing).
+# Update existing host.v1 configs to ensure address and listenOptions stay current (create skips existing).
 ziti_exec "update config ingress-host -d '{
   \"protocol\": \"tcp\",
   \"address\": \"envoy-main-lan-vip.envoy-gateway-system.svc\",
-  \"port\": 443
+  \"port\": 443,
+  \"listenOptions\": {
+    \"connectTimeoutSeconds\": 30,
+    \"precedence\": \"required\"
+  }
 }'"
 
 # 1b. K8s API host.v1 — each control-plane node binds localhost:6443 directly.
