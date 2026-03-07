@@ -26,9 +26,8 @@ imagePullSecrets:
 useCustomAdminSecret: true
 customAdminSecretName: ziti-controller-admin-secret
 
-# NOTE: External LE TLS is terminated by Envoy Gateway, not the controller.
-# The RSA LE cert (ziti-controller-le-server-cert) is referenced by the
-# Gateway HTTPS listener via ReferenceGrant. The controller serves only
-# internal PKI on port 1280 — no additionalConfigs or altServerCerts needed.
-# Controller xweb v3.0.3 panics on additionalConfigs.web (nil Identity in
-# NewServer), so Envoy TLS termination is the correct enterprise pattern.
+# NOTE: Envoy Gateway uses TLS Passthrough for Ziti — the controller's own
+# PKI handles mTLS with clients directly. No LE cert or ReferenceGrant needed.
+# The controller serves internal PKI on port 1280 — no additionalConfigs or
+# altServerCerts needed. Controller xweb v3.0.3 panics on
+# additionalConfigs.web (nil Identity in NewServer).
