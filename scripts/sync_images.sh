@@ -25,6 +25,7 @@ IMAGES=(
   "docker.io/openziti/ziti-controller"
   "docker.io/openziti/ziti-router"
   "docker.io/openziti/zac"
+  "docker.io/openziti/ziti-edge-tunnel"
 )
 
 log() { echo "==> $*"; }

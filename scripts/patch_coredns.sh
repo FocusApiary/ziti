@@ -40,6 +40,12 @@ DRY_RUN="${DRY_RUN:-}"
 INGRESS_NS="${INGRESS_NS:-envoy-gateway-system}"
 INGRESS_SVC="${INGRESS_SVC:-envoy-envoy-gateway-system-main-b3b376e9}"
 
+# Custom host entries with non-Envoy-Gateway IPs (service_name:namespace → hostname).
+# These are discovered dynamically and added alongside the Envoy Gateway entries.
+BACKUP_PROXY_SVC="backup-proxy"
+BACKUP_PROXY_NS="ziti"
+BACKUP_PROXY_HOST="focusapiarybackups.blob.core.windows.net"
+
 # Hostnames to add (all resolve to the Envoy Gateway proxy ClusterIP).
 HOSTS=(
   "auth.focuspass.com"
@@ -110,6 +116,17 @@ fi
 
 log "Envoy Gateway proxy ClusterIP: $INGRESS_IP"
 
+# ---------- discover backup-proxy ClusterIP -----------------------------------
+
+BACKUP_PROXY_IP=$(kubectl -n "$BACKUP_PROXY_NS" get svc "$BACKUP_PROXY_SVC" \
+  -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)
+
+if [[ -n "$BACKUP_PROXY_IP" ]]; then
+  log "Backup proxy ClusterIP: $BACKUP_PROXY_IP"
+else
+  log "Backup proxy service not found — skipping $BACKUP_PROXY_HOST"
+fi
+
 # ---------- read current Corefile --------------------------------------------
 
 log "Reading current CoreDNS ConfigMap"
@@ -133,6 +150,16 @@ for host in "${HOSTS[@]}"; do
   fi
 done
 
+# Check backup-proxy host entry (different IP than Envoy Gateway).
+if [[ -n "$BACKUP_PROXY_IP" ]]; then
+  if echo "$CURRENT_COREFILE" | grep -qF "$BACKUP_PROXY_HOST"; then
+    log "Already present: $BACKUP_PROXY_HOST (skipping)"
+  else
+    entries_to_add+=("$BACKUP_PROXY_HOST")
+    log "Missing: $BACKUP_PROXY_HOST (will add with backup-proxy IP)"
+  fi
+fi
+
 if [[ ${#entries_to_add[@]} -eq 0 ]]; then
   log "All entries already present — nothing to do"
   exit 0
@@ -149,7 +176,11 @@ if echo "$CURRENT_COREFILE" | grep -q "hosts {"; then
   # Hosts block exists — insert entries before "fallthrough".
   new_lines=""
   for host in "${entries_to_add[@]}"; do
-    new_lines="${new_lines}            ${INGRESS_IP} ${host}\n"
+    if [[ "$host" == "$BACKUP_PROXY_HOST" && -n "$BACKUP_PROXY_IP" ]]; then
+      new_lines="${new_lines}            ${BACKUP_PROXY_IP} ${host}\n"
+    else
+      new_lines="${new_lines}            ${INGRESS_IP} ${host}\n"
+    fi
   done
 
   PATCHED_COREFILE=$(echo "$CURRENT_COREFILE" | sed "/hosts {/,/fallthrough/ {
@@ -160,7 +191,11 @@ else
   # No hosts block — create one before the kubernetes block.
   hosts_block="        hosts {\n"
   for host in "${entries_to_add[@]}"; do
-    hosts_block="${hosts_block}            ${INGRESS_IP} ${host}\n"
+    if [[ "$host" == "$BACKUP_PROXY_HOST" && -n "$BACKUP_PROXY_IP" ]]; then
+      hosts_block="${hosts_block}            ${BACKUP_PROXY_IP} ${host}\n"
+    else
+      hosts_block="${hosts_block}            ${INGRESS_IP} ${host}\n"
+    fi
   done
   hosts_block="${hosts_block}            fallthrough\n        }"
 

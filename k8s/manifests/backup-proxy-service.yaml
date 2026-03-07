@@ -1,0 +1,18 @@
+# ClusterIP Service for the backup proxy.
+# Static ClusterIP for stable CoreDNS hosts entry.
+# CoreDNS resolves focusapiarybackups.blob.core.windows.net → this IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backup-proxy
+  namespace: ziti
+spec:
+  type: ClusterIP
+  clusterIP: 10.96.200.100
+  selector:
+    app: backup-proxy
+  ports:
+    - port: 443
+      targetPort: 8443
+      protocol: TCP
+      name: https

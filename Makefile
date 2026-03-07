@@ -1,4 +1,4 @@
-.PHONY: help lint deploy deploy-metallb sync-images store-secrets configure-services configure-keycloak configure-oidc create-identities enroll-oidc-vms patch-coredns install-tunnel
+.PHONY: help lint deploy deploy-metallb sync-images store-secrets configure-services configure-keycloak configure-oidc create-identities enroll-oidc-vms enroll-backup patch-coredns install-tunnel
 
 help:
 	@echo "Targets:"
@@ -12,6 +12,7 @@ help:
 	@echo "  make configure-oidc      — Create Ziti ext-jwt-signer, auth-policy, OIDC + kiosk identities"
 	@echo "  make create-identities   — Create employee identities (NAMES='a b')"
 	@echo "  make enroll-oidc-vms     — Enroll OIDC identities on Curiosity Computer VMs via SSH"
+	@echo "  make enroll-backup       — Enroll backup tunnel identities + store in AKV"
 	@echo "  make patch-coredns       — Add service hostnames to CoreDNS"
 	@echo "  make install-tunnel      — Install ziti-tunnel systemd service (sudo)"
 
@@ -45,6 +46,9 @@ create-identities:
 
 enroll-oidc-vms:
 	scripts/enroll_oidc_identities.sh
+
+enroll-backup:
+	scripts/enroll_backup_identities.sh
 
 patch-coredns:
 	scripts/patch_coredns.sh
