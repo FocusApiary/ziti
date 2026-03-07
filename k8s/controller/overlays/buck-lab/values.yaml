@@ -8,6 +8,8 @@ ctrlPlane:
 
 persistence:
   storageClass: longhorn-r2
+  labels:
+    recurring-job-group.longhorn.io/critical: enabled
 
 image:
   repository: harbor.focuscell.org/infra/ziti-controller
