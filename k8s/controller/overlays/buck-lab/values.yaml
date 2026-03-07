@@ -2,18 +2,6 @@
 
 clientApi:
   advertisedHost: ziti.focuspass.com
-  # LE alt cert for browser-based OIDC enrollment. Go's crypto/tls selects the
-  # best-matching cert per ClientHello (RSA LE for browsers, ECDSA PKI for
-  # tunnelers). Tunneler clients work regardless — they use the PKI cert.
-  # If LE is rate-limited, cert-manager will retry automatically.
-  altServerCerts:
-    - mode: certManager
-      secretName: ziti-controller-le-server-cert
-      issuerRef:
-        group: cert-manager.io
-        kind: ClusterIssuer
-        name: letsencrypt-prod
-      mountPath: /etc/ziti/alt-server-cert
 
 ctrlPlane:
   advertisedHost: ziti.focuspass.com
@@ -38,6 +26,21 @@ imagePullSecrets:
 useCustomAdminSecret: true
 customAdminSecretName: ziti-controller-admin-secret
 
-# NOTE: Envoy Gateway uses TLS Passthrough for Ziti — the controller serves
-# its own PKI cert AND the LE alt cert. No HTTPS Terminate, no
-# BackendTLSPolicy, no ReferenceGrant needed.
+# LE alt cert for browser-based OIDC enrollment. Go's crypto/tls selects the
+# best-matching cert per ClientHello (RSA LE for browsers, ECDSA PKI for
+# tunnelers). Tunneler clients work regardless — they use the PKI cert.
+# If LE is rate-limited, cert-manager will retry automatically.
+#
+# NOTE: Envoy Gateway uses TLS Passthrough — the controller serves its own PKI
+# cert AND the LE alt cert. No HTTPS Terminate / BackendTLSPolicy needed.
+webBindingPki:
+  altServerCerts:
+    - mode: certManager
+      secretName: ziti-controller-le-server-cert
+      altDnsNames:
+        - ziti.focuspass.com
+      issuerRef:
+        group: cert-manager.io
+        kind: ClusterIssuer
+        name: letsencrypt-prod
+      mountPath: /etc/ziti/alt-server-cert
