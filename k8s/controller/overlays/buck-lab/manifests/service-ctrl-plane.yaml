@@ -1,0 +1,26 @@
+# Dedicated ctrl-plane service for router connections.
+# Named to match the ctrl-plane-identity cert SANs:
+#   ziti-controller-ctrl, ziti-controller-ctrl.ziti,
+#   ziti-controller-ctrl.ziti.svc, ziti-controller-ctrl.ziti.svc.cluster.local
+# The Helm chart creates ziti-controller-client (for client API consumers),
+# but its cert SANs use the -ctrl suffix — this service bridges that gap.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ziti-controller-ctrl
+  namespace: ziti
+  labels:
+    app.kubernetes.io/name: ziti-controller
+    app.kubernetes.io/instance: ziti-controller
+    app.kubernetes.io/component: ziti-controller
+spec:
+  type: ClusterIP
+  ports:
+    - port: 443
+      targetPort: 1280
+      protocol: TCP
+      name: ctrl
+  selector:
+    app.kubernetes.io/component: ziti-controller
+    app.kubernetes.io/instance: ziti-controller
+    app.kubernetes.io/name: ziti-controller

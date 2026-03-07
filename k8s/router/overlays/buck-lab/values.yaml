@@ -1,7 +1,7 @@
 # Buck-lab router overrides.
 
 ctrl:
-  endpoint: ziti-controller-client.ziti.svc:443
+  endpoint: ziti-controller-ctrl.ziti.svc:443
 
 edge:
   advertisedHost: ziti-router.focuspass.com
