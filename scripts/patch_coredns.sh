@@ -49,6 +49,7 @@ BACKUP_PROXY_HOST="focusapiarybackups.blob.core.windows.net"
 # Hostnames to add (all resolve to the Envoy Gateway proxy ClusterIP).
 HOSTS=(
   "auth.focuspass.com"
+  "enroll.focuspass.com"
   "ziti-router.focuspass.com"
   "argocd.focuscell.org"
   "domains.focuscell.org"

@@ -56,8 +56,9 @@ GitHub (source of truth) -> CI (lint + image sync to Harbor) -> ArgoCD or deploy
 
 ## Hostnames (3-level for Cloudflare compat)
 
-- Controller: `ziti.focuspass.com`
+- Controller: `ziti.focuspass.com` (PKI cert — tunnelers, SDK clients)
 - Router: `ziti-router.focuspass.com`
+- OIDC Enrollment: `enroll.focuspass.com` (LE cert — browsers)
 
 ## Service Routing (ZTNA)
 
@@ -153,6 +154,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 
 Required for services that do OIDC validation or cross-service calls:
 - `auth.focuspass.com` -> Envoy Gateway ClusterIP
+- `enroll.focuspass.com` -> Envoy Gateway ClusterIP (OIDC enrollment)
 - `argocd.focuscell.org` -> Envoy Gateway ClusterIP
 - `git.developerdojo.org` -> Envoy Gateway ClusterIP
 
@@ -181,13 +183,15 @@ MetalLB L2 mode provides LoadBalancer IPs for bare-metal clusters. Deployed via 
 Controller + router must be publicly reachable for client enrollment and data plane:
 
 ```
-ziti.focuspass.com         -> CNAME -> <dc-ddns-hostname>
+ziti.focuspass.com         -> CNAME -> <dc-ddns-hostname>   # PKI cert (tunnelers)
 ziti-router.focuspass.com  -> CNAME -> <dc-ddns-hostname>
+enroll.focuspass.com       -> CNAME -> <dc-ddns-hostname>   # LE cert (browser OIDC enrollment)
 ```
 
 - CNAME targets the DC's DDNS hostname (e.g., `2405-45th.ddns.net` for buck-lab)
 - CF proxy must be OFF (grey cloud) — Ziti does its own mTLS
 - Router port forward: WAN 443 -> MetalLB IP:443
+- `enroll.focuspass.com` serves LE cert for browser OIDC enrollment (separate hostname required — Go's `crypto/tls` selects certs by SNI, first-match-wins; same hostname would always serve PKI cert)
 
 ## Important
 

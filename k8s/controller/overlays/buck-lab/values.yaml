@@ -2,6 +2,11 @@
 
 clientApi:
   advertisedHost: ziti.focuspass.com
+  # Alt hostname for browser-based OIDC enrollment. Go's crypto/tls selects
+  # certs by SNI — the LE alt cert only has enroll.focuspass.com as SAN, so
+  # browsers hitting this hostname get the trusted LE cert automatically.
+  altDnsNames:
+    - enroll.focuspass.com
 
 ctrlPlane:
   advertisedHost: ziti.focuspass.com
@@ -26,19 +31,20 @@ imagePullSecrets:
 useCustomAdminSecret: true
 customAdminSecretName: ziti-controller-admin-secret
 
-# LE alt cert for browser-based OIDC enrollment. Go's crypto/tls selects the
-# best-matching cert per ClientHello (RSA LE for browsers, ECDSA PKI for
-# tunnelers). Tunneler clients work regardless — they use the PKI cert.
-# If LE is rate-limited, cert-manager will retry automatically.
+# LE alt cert for browser-based OIDC enrollment on enroll.focuspass.com.
+# Go's crypto/tls selects certs by SNI: the PKI cert only matches
+# ziti.focuspass.com, the LE cert only matches enroll.focuspass.com.
+# Tunnelers use ziti.focuspass.com → PKI cert (pinned in identity JSON).
+# Browsers use enroll.focuspass.com → LE cert (OS-trusted for OIDC flow).
 #
-# NOTE: Envoy Gateway uses TLS Passthrough — the controller serves its own PKI
-# cert AND the LE alt cert. No HTTPS Terminate / BackendTLSPolicy needed.
+# NOTE: Envoy Gateway uses TLS Passthrough for both hostnames.
+# No HTTPS Terminate / BackendTLSPolicy needed.
 webBindingPki:
   altServerCerts:
     - mode: certManager
       secretName: ziti-controller-le-server-cert
       altDnsNames:
-        - ziti.focuspass.com
+        - enroll.focuspass.com
       issuerRef:
         group: cert-manager.io
         kind: ClusterIssuer
