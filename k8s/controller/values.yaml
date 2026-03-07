@@ -41,3 +41,12 @@ securityContext:
       - ALL
   seccompProfile:
     type: RuntimeDefault
+
+# Resource requests/limits — satisfies Kyverno audit-require-container-resources policy.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
