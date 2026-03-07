@@ -86,6 +86,7 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 | api-studio-hardmagic | api.studio.hardmagic.com | 443 | |
 | api-vllm-hardmagic | api.vllm.hardmagic.com | 443 | OpenAI-compatible vLLM API |
 | studio-hypersight | studio.hypersight.net | 443 | |
+| domainsearch | domains.focuscell.org | 443 | Domain availability checker |
 
 ### Dev Services (attribute: #dev-services)
 

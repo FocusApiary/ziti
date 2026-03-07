@@ -241,6 +241,7 @@ SERVICES=(
   "k8s-api|api.buck-lab.ziti.focuscell.org|6443|k8s-api-host"
   "focusmail-web|mail.focuscell.org|443|"
   "focusmail-api|mail-api.focuscell.org|443|"
+  "domainsearch|domains.focuscell.org|443|"
 )
 
 # OpenClaw services — restricted to #openclaw-admin only, NOT #internal-services.
@@ -284,6 +285,7 @@ declare -A SERVICE_GROUP=(
   [k8s-api]=cluster-services
   [focusmail-web]=core-services
   [focusmail-api]=core-services
+  [domainsearch]=core-services
 )
 
 for entry in "${SERVICES[@]}"; do
