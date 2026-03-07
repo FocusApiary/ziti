@@ -32,13 +32,6 @@ additionalVolumes:
     mountPath: /etc/ziti/le-server-cert
     secretName: ziti-controller-le-server-cert
 
-# Reference the mounted LE cert as an alt server cert on the default listener (1280).
-# Harmless on 1280 since internal clients trust either cert.
-webBindingPki:
-  altServerCerts:
-    - mode: secret
-      secretName: ziti-controller-le-server-cert
-
 # Dedicated LE listener for external tunneler clients (ZDE, mobile, t460-remote).
 # LE cert is the ONLY server cert — no Go TLS cert selection ambiguity.
 # Port 8443 is exposed via ziti-controller-public K8s service + Envoy TLS passthrough.
