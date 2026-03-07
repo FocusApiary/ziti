@@ -14,7 +14,7 @@ metadata:
   labels:
     app: backup-proxy
 spec:
-  replicas: 1
+  replicas: 0  # scaled down until ziti identity enrolled (backup-proxy-identity secret missing)
   strategy:
     type: Recreate
   selector:
