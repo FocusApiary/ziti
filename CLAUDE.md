@@ -191,7 +191,7 @@ enroll.focuspass.com       -> CNAME -> <dc-ddns-hostname>   # LE cert (browser O
 - CNAME targets the DC's DDNS hostname (e.g., `2405-45th.ddns.net` for buck-lab)
 - CF proxy must be OFF (grey cloud) — Ziti does its own mTLS
 - Router port forward: WAN 443 -> MetalLB IP:443
-- `enroll.focuspass.com` serves LE cert for browser OIDC enrollment (separate hostname required — Go's `crypto/tls` selects certs by SNI, first-match-wins; same hostname would always serve PKI cert)
+- `enroll.focuspass.com` — OIDC enrollment for browsers. Envoy HTTPS Terminate (LE cert) + re-encrypt to controller with Host rewrite to `ziti.focuspass.com`. Separate Service `ziti-controller-enroll` isolates BackendTLSPolicy from TLSRoute passthrough. See `envoy-gateway-k8s/` for implementation.
 
 ## Important
 
@@ -214,3 +214,4 @@ enroll.focuspass.com       -> CNAME -> <dc-ddns-hostname>   # LE cert (browser O
 - CF API token in AKV (`cloudflare-api-token`) lacks DNS record permissions for focuspass.com zone
 - tunnel.go `myCopy` receive direction logs router identity as `circuitId` — looks like zombie circuit but is harmless (upstream PR #3649)
 - sdk-golang v1.4.2 xgress EOF handling bug causes intermittent connection failures under concurrency (upstream PR #880, fix unreleased)
+- xweb v3.0.3 panics when two listeners share a port ("handler for protocol[h2] already exists" → nil pointer dereference). Cannot use `additionalConfigs.web` for same-port multi-binding.

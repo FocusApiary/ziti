@@ -51,8 +51,8 @@ webBindingPki:
         name: letsencrypt-prod
       mountPath: /etc/ziti/alt-server-cert
 
-# NOTE: additionalConfigs.web with a second listener on the same port causes
-# xweb v3.0.3 to panic ("handler for protocol[h2] already exists"). The OIDC
-# enrollment endpoint for enroll.focuspass.com is instead served via Envoy
-# HTTPS Terminate + re-encrypt with Host rewrite to ziti.focuspass.com.
-# See envoy-gateway-k8s for the HTTPRoute + BackendTLSPolicy.
+# NOTE: xweb v3.0.3 cannot share a port between two listeners (panics with
+# "handler for protocol[h2] already exists"). The OIDC enrollment endpoint
+# for enroll.focuspass.com is served via Envoy HTTPS Terminate + re-encrypt
+# with Host rewrite to ziti.focuspass.com. See envoy-gateway-k8s for the
+# HTTPRoute, BackendTLSPolicy, and dedicated LE cert.
