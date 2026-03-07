@@ -24,37 +24,9 @@ imagePullSecrets:
 useCustomAdminSecret: true
 customAdminSecretName: ziti-controller-admin-secret
 
-# Mount the LE cert secret (managed by our own Certificate resource, not the chart).
-# The chart's altServerCerts mode:certManager hardcodes ECDSA — ZDE requires RSA.
-additionalVolumes:
-  - name: le-server-cert
-    volumeType: secret
-    mountPath: /etc/ziti/le-server-cert
-    secretName: ziti-controller-le-server-cert
-
-# Dedicated LE listener for external tunneler clients (ZDE, mobile, t460-remote).
-# LE cert is the ONLY server cert — no Go TLS cert selection ambiguity.
-# Port 8443 is exposed via ziti-controller-public K8s service + Envoy TLS passthrough.
-additionalConfigs:
-  web:
-    - name: public-client
-      bindPoints:
-        - interface: 0.0.0.0:8443
-          address: ziti.focuspass.com:443
-      identity:
-        server_cert: /etc/ziti/le-server-cert/tls.crt
-        server_key: /etc/ziti/le-server-cert/tls.key
-        cert: /etc/ziti/web-client-identity/tls.crt
-        key: /etc/ziti/web-client-identity/tls.key
-        ca: /etc/ziti/web-identity/ca.crt
-      options:
-        idleTimeout: 5000ms
-        readTimeout: 5000ms
-        writeTimeout: 100000ms
-        minTLSVersion: TLS1.2
-        maxTLSVersion: TLS1.3
-      apis:
-        - binding: edge-client
-          options: {}
-        - binding: edge-oidc
-          options: {}
+# NOTE: External LE TLS is terminated by Envoy Gateway, not the controller.
+# The RSA LE cert (ziti-controller-le-server-cert) is referenced by the
+# Gateway HTTPS listener via ReferenceGrant. The controller serves only
+# internal PKI on port 1280 — no additionalConfigs or altServerCerts needed.
+# Controller xweb v3.0.3 panics on additionalConfigs.web (nil Identity in
+# NewServer), so Envoy TLS termination is the correct enterprise pattern.
