@@ -1,14 +1,11 @@
 # Backup proxy: routes Longhorn Azure Blob backup traffic through the Ziti
 # E2EE overlay to the Azure ACI tunneler. No public internet egress needed.
 #
-# Container 1 (tunnel): ziti-edge-tunnel in run mode — creates TUN interface,
-#   intercepts DNS for focusapiarybackups.blob.core.windows.net, routes through Ziti.
-# Container 2 (proxy): HAProxy TCP proxy — bridges ClusterIP traffic to the
-#   tunnel's virtual IP via the tunnel's DNS resolver.
+# Uses `ziti tunnel proxy` mode — creates a TCP listener on port 8443 that
+# proxies connections through the Ziti overlay. No TUN/NET_ADMIN required.
 #
-# Image prerequisites (mirror to Harbor):
-#   - openziti/ziti-edge-tunnel → harbor.focuscell.org/openziti/ziti-edge-tunnel
-#   - haproxy:lts-alpine → harbor.focuscell.org/library/haproxy
+# Image prerequisite: mirror the ziti CLI image to Harbor. The controller
+# image already contains the `ziti` binary — reuse it.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,40 +25,41 @@ spec:
       labels:
         app: backup-proxy
     spec:
-      # Use tunnel's DNS (100.64.0.2) as primary, kube-dns as fallback.
-      dnsPolicy: None
-      dnsConfig:
-        nameservers:
-          - "100.64.0.2"
-          - "10.96.0.10"
-        searches:
-          - ziti.svc.cluster.local
-          - svc.cluster.local
-          - cluster.local
       nodeSelector:
         om-labs.io/storage-node: "true"
       imagePullSecrets:
         - name: harbor-pull-secret
       containers:
-        - name: tunnel
-          # TODO: pin version and mirror to Harbor via sync_images.sh
-          image: harbor.focuscell.org/openziti/ziti-edge-tunnel:latest
+        - name: proxy
+          # Reuse the controller image which has the full `ziti` CLI.
+          image: harbor.focuscell.org/infra/ziti-controller:2.0.0-pre2-patched
+          command:
+            - ziti
           args:
-            - run
-            - --identity-dir
-            - /ziti/identities
-            - --dns-ip-range
-            - 100.64.0.0/16
+            - tunnel
+            - proxy
+            - azure-blob-backup:8443
+            - -i
+            - /ziti/identities/backup-proxy.json
+            - -v
           securityContext:
+            allowPrivilegeEscalation: false
             capabilities:
-              add:
-                - NET_ADMIN
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            runAsUser: 2171
+            runAsGroup: 2171
+            runAsNonRoot: true
+          ports:
+            - containerPort: 8443
+              name: proxy
+              protocol: TCP
           volumeMounts:
             - name: identity
               mountPath: /ziti/identities
               readOnly: true
-            - name: tun
-              mountPath: /dev/net/tun
           resources:
             requests:
               cpu: 10m
@@ -69,39 +67,12 @@ spec:
             limits:
               cpu: 100m
               memory: 128Mi
-        - name: proxy
-          # TODO: mirror haproxy:lts-alpine to Harbor
-          image: harbor.focuscell.org/library/haproxy:lts-alpine
-          volumeMounts:
-            - name: haproxy-config
-              mountPath: /usr/local/etc/haproxy
-              readOnly: true
-          ports:
-            - containerPort: 8443
-              name: proxy
-              protocol: TCP
-          resources:
-            requests:
-              cpu: 5m
-              memory: 16Mi
-            limits:
-              cpu: 50m
-              memory: 64Mi
-          # HAProxy with init-addr none defers DNS resolution until first
-          # connection, so it tolerates the tunnel container starting slowly.
           readinessProbe:
             tcpSocket:
               port: 8443
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 10
       volumes:
         - name: identity
           secret:
             secretName: backup-proxy-identity
-        - name: haproxy-config
-          configMap:
-            name: backup-proxy-haproxy
-        - name: tun
-          hostPath:
-            path: /dev/net/tun
-            type: CharDevice
