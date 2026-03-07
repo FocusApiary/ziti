@@ -24,19 +24,20 @@ imagePullSecrets:
 useCustomAdminSecret: true
 customAdminSecretName: ziti-controller-admin-secret
 
-# Let's Encrypt cert so tunneler clients trust the controller without
-# distributing a self-signed CA to every device.
+# Mount the LE cert secret (managed by our own Certificate resource, not the chart).
+# The chart's altServerCerts mode:certManager hardcodes ECDSA — ZDE requires RSA.
+additionalVolumes:
+  - name: le-server-cert
+    volumeType: secret
+    mountPath: /etc/ziti/le-server-cert
+    secretName: ziti-controller-le-server-cert
+
+# Reference the mounted LE cert as an alt server cert on the default listener (1280).
+# Harmless on 1280 since internal clients trust either cert.
 webBindingPki:
   altServerCerts:
-    - mode: certManager
+    - mode: secret
       secretName: ziti-controller-le-server-cert
-      altDnsNames:
-        - ziti.focuspass.com
-      issuerRef:
-        group: cert-manager.io
-        kind: ClusterIssuer
-        name: letsencrypt-prod
-      mountPath: /etc/ziti/alt-server-cert
 
 # Dedicated LE listener for external tunneler clients (ZDE, mobile, t460-remote).
 # LE cert is the ONLY server cert — no Go TLS cert selection ambiguity.
@@ -48,8 +49,8 @@ additionalConfigs:
         - interface: 0.0.0.0:8443
           address: ziti.focuspass.com:443
       identity:
-        server_cert: /etc/ziti/alt-server-cert/tls.crt
-        server_key: /etc/ziti/alt-server-cert/tls.key
+        server_cert: /etc/ziti/le-server-cert/tls.crt
+        server_key: /etc/ziti/le-server-cert/tls.key
         cert: /etc/ziti/web-client-identity/tls.crt
         key: /etc/ziti/web-client-identity/tls.key
         ca: /etc/ziti/web-identity/ca.crt
