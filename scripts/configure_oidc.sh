@@ -104,6 +104,18 @@ ziti_exec() {
   return 0
 }
 
+# Call the Ziti management REST API.
+# Usage: curl_mgmt <METHOD> <PATH> <BODY> <TOKEN>
+curl_mgmt() {
+  local method="$1" path="$2" body="$3" token="$4"
+  local url="https://localhost:${CTRL_MGMT_PORT}/edge/management/v1${path}"
+  local args=(-sk -X "$method" "$url" -H "zt-session: ${token}" -H "Content-Type: application/json")
+  if [[ -n "$body" ]]; then
+    args+=(-d "$body")
+  fi
+  kubectl -n ziti exec "$CTRL_POD" -c ziti-controller -- curl "${args[@]}" 2>/dev/null
+}
+
 # Run a ziti edge command and capture stdout (for JSON parsing).
 ziti_exec_capture() {
   if [[ -n "$DRY_RUN" ]]; then
@@ -135,11 +147,25 @@ if [[ -z "$DRY_RUN" ]]; then
 
   ADMIN_PW="$(get_admin_password)"
 
-  log "Logging in to controller ($CTRL_POD)"
-  if ! kubectl -n ziti exec "$CTRL_POD" -- sh -c \
-    "ziti edge login localhost:${CTRL_MGMT_PORT} -u admin -p '${ADMIN_PW}' --yes" \
+  # v2.0.0 CLI uses OIDC for login; use REST API for password auth, then
+  # pass the token to the CLI for subsequent commands.
+  log "Authenticating to controller via REST API ($CTRL_POD)"
+  ADMIN_TOKEN=$(kubectl -n ziti exec "$CTRL_POD" -c ziti-controller -- \
+    curl -sk -X POST "https://localhost:${CTRL_MGMT_PORT}/edge/management/v1/authenticate?method=password" \
+    -H 'Content-Type: application/json' \
+    -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PW}\"}" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['token'])")
+
+  if [[ -z "$ADMIN_TOKEN" ]]; then
+    warn "REST API authentication failed"
+    exit 1
+  fi
+
+  # Set CLI session token so ziti_exec commands work without OIDC login.
+  if ! kubectl -n ziti exec "$CTRL_POD" -c ziti-controller -- sh -c \
+    "ziti edge login localhost:${CTRL_MGMT_PORT} --token '${ADMIN_TOKEN}' --yes" \
     >/dev/null 2>&1; then
-    warn "Admin password login failed; continuing with existing CLI identity context"
+    warn "CLI token login failed; continuing with REST API only"
   fi
 else
   CTRL_POD="(dry-run)"
@@ -156,18 +182,79 @@ log "--- Phase 1: ext-jwt-signer ---"
 
 SIGNER_NAME="keycloak-omlabs"
 
-log "Creating ext-jwt-signer: $SIGNER_NAME"
-# Usage: ziti edge create ext-jwt-signer <name> <issuer> -u <jwks> [flags]
-# issuer is positional, --scopes takes repeated flags
-ziti_exec "create ext-jwt-signer '${SIGNER_NAME}' \
-  'https://auth.focuspass.com/realms/omlabs' \
-  -u 'https://auth.focuspass.com/realms/omlabs/protocol/openid-connect/certs' \
-  -a 'openziti' \
-  --client-id 'openziti-tunneler' \
-  -c 'email' \
-  -x \
-  -y 'https://auth.focuspass.com/realms/omlabs/protocol/openid-connect/auth' \
-  --scopes 'openid' --scopes 'profile' --scopes 'email' --scopes 'offline_access'"
+KC_INTERNAL_JWKS="http://slidee-kc-service.keycloak.svc.cluster.local:8080/realms/omlabs/protocol/openid-connect/certs"
+KC_ISSUER="https://auth.focuspass.com/realms/omlabs"
+KC_AUTH_URL="https://auth.focuspass.com/realms/omlabs/protocol/openid-connect/auth"
+
+# Fetch the signing cert from Keycloak's internal JWKS endpoint so the
+# controller never needs external access to auth.focuspass.com.
+log "Fetching signing cert from internal Keycloak JWKS..."
+if [[ -z "$DRY_RUN" ]]; then
+  KC_CERT_PEM=$(kubectl -n ziti exec "$CTRL_POD" -c ziti-controller -- \
+    curl -sf "$KC_INTERNAL_JWKS" 2>/dev/null \
+    | python3 -c "
+import sys, json, textwrap
+data = json.load(sys.stdin)
+for key in data['keys']:
+    if key.get('use') == 'sig' and 'x5c' in key:
+        der_b64 = key['x5c'][0]
+        pem = '-----BEGIN CERTIFICATE-----\n' + '\n'.join(textwrap.wrap(der_b64, 64)) + '\n-----END CERTIFICATE-----'
+        print(pem)
+        break
+")
+
+  if [[ -z "$KC_CERT_PEM" ]]; then
+    warn "Could not fetch signing cert from Keycloak JWKS -- cannot continue"
+    exit 1
+  fi
+  log "Got signing cert ($(echo "$KC_CERT_PEM" | wc -c) bytes)"
+fi
+
+# Create or update the ext-jwt-signer via REST API.
+# The CLI's create command doesn't support certPem, so we use the REST API
+# directly. certPem is used instead of jwksEndpoint so the controller never
+# needs to reach auth.focuspass.com externally.
+log "Creating/updating ext-jwt-signer: $SIGNER_NAME"
+if [[ -n "$DRY_RUN" ]]; then
+  echo "  [dry-run] POST/PUT /edge/management/v1/external-jwt-signers (certPem from internal JWKS)"
+else
+  ESCAPED_CERT=$(python3 -c "import json; print(json.dumps('''$KC_CERT_PEM'''))")
+
+  # Check if signer already exists.
+  EXISTING_SIGNER=$(curl_mgmt "GET" "/external-jwt-signers?filter=name%3D%22${SIGNER_NAME}%22" "" "$ADMIN_TOKEN")
+  EXISTING_ID=$(echo "$EXISTING_SIGNER" | python3 -c "
+import sys, json
+try:
+    items = json.load(sys.stdin).get('data', [])
+    if items: print(items[0]['id'])
+except: pass
+" 2>/dev/null || true)
+
+  SIGNER_BODY="{
+    \"name\": \"keycloak-omlabs\",
+    \"issuer\": \"${KC_ISSUER}\",
+    \"certPem\": ${ESCAPED_CERT},
+    \"audience\": \"openziti\",
+    \"clientId\": \"openziti-tunneler\",
+    \"claimsProperty\": \"email\",
+    \"useExternalId\": true,
+    \"enabled\": true,
+    \"externalAuthUrl\": \"${KC_AUTH_URL}\",
+    \"scopes\": [\"openid\", \"profile\", \"email\", \"offline_access\"],
+    \"enrollToCertEnabled\": true,
+    \"enrollToTokenEnabled\": true,
+    \"enrollNameClaimsSelector\": \"/email\",
+    \"enrollAttributeClaimsSelector\": \"/realm_roles\"
+  }"
+
+  if [[ -n "$EXISTING_ID" ]]; then
+    log "Signer '$SIGNER_NAME' exists (id=$EXISTING_ID) -- updating via PUT"
+    curl_mgmt "PUT" "/external-jwt-signers/${EXISTING_ID}" "$SIGNER_BODY" "$ADMIN_TOKEN" >/dev/null
+  else
+    log "Creating signer '$SIGNER_NAME' via POST"
+    curl_mgmt "POST" "/external-jwt-signers" "$SIGNER_BODY" "$ADMIN_TOKEN" >/dev/null
+  fi
+fi
 
 # ============================================================================
 # Phase 2: auth-policy
@@ -177,13 +264,12 @@ log "--- Phase 2: auth-policy ---"
 
 AUTH_POLICY_NAME="oidc-keycloak"
 
-# Must use signer ID not name (OpenZiti bug #2352).
+# Resolve signer ID via REST API.
 log "Resolving ext-jwt-signer ID for $SIGNER_NAME"
 SIGNER_ID=""
 if [[ -z "$DRY_RUN" ]]; then
-  signer_json="$(ziti_exec_capture "list ext-jwt-signers 'name=\"${SIGNER_NAME}\"' -j")"
+  signer_json="$(curl_mgmt "GET" "/external-jwt-signers?filter=name%3D%22${SIGNER_NAME}%22" "" "$ADMIN_TOKEN")"
 
-  # Try python3 first, fall back to grep.
   SIGNER_ID="$(python3 -c "
 import json, sys
 try:
@@ -194,10 +280,6 @@ try:
 except Exception:
     pass
 " <<< "$signer_json" 2>/dev/null || true)"
-
-  if [[ -z "$SIGNER_ID" ]]; then
-    SIGNER_ID="$(echo "$signer_json" | grep -oP '"id"\s*:\s*"\K[^"]+' | head -1 || true)"
-  fi
 
   if [[ -z "$SIGNER_ID" ]]; then
     warn "Could not resolve ext-jwt-signer ID for '$SIGNER_NAME' -- cannot continue"
