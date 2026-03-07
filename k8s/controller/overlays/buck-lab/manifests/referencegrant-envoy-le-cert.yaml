@@ -1,0 +1,17 @@
+# Allow Envoy Gateway to reference the LE cert secret in this namespace.
+# The Gateway HTTPS listener for ziti.focuspass.com terminates TLS using the
+# ziti-controller-le-server-cert secret (created by certificate-le-server.yaml).
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: envoy-gateway-le-cert
+  namespace: ziti
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: envoy-gateway-system
+  to:
+    - group: ""
+      kind: Secret
+      name: ziti-controller-le-server-cert
