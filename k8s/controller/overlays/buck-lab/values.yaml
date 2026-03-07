@@ -51,30 +51,8 @@ webBindingPki:
         name: letsencrypt-prod
       mountPath: /etc/ziti/alt-server-cert
 
-# Second xweb listener for browser OIDC enrollment on enroll.focuspass.com.
-# Shares port 1280 with the client listener — xweb multiplexes by Host header.
-# The LE cert is the PRIMARY server_cert here (not alt), so Go's crypto/tls
-# always selects it. The PKI cert is only on the "client" listener above.
-additionalConfigs:
-  web:
-    - name: enroll
-      bindPoints:
-        - interface: 0.0.0.0:1280
-          address: enroll.focuspass.com:443
-      identity:
-        cert:        /etc/ziti/web-client-identity/tls.crt
-        key:         /etc/ziti/web-client-identity/tls.key
-        server_cert: /etc/ziti/alt-server-cert/tls.crt
-        server_key:  /etc/ziti/alt-server-cert/tls.key
-        ca:          /etc/ziti/web-identity/ca.crt
-      options:
-        idleTimeout: 5000ms
-        readTimeout: 5000ms
-        writeTimeout: 100000ms
-        minTLSVersion: TLS1.2
-        maxTLSVersion: TLS1.3
-      apis:
-        - binding: edge-client
-          options: {}
-        - binding: edge-oidc
-          options: {}
+# NOTE: additionalConfigs.web with a second listener on the same port causes
+# xweb v3.0.3 to panic ("handler for protocol[h2] already exists"). The OIDC
+# enrollment endpoint for enroll.focuspass.com is instead served via Envoy
+# HTTPS Terminate + re-encrypt with Host rewrite to ziti.focuspass.com.
+# See envoy-gateway-k8s for the HTTPRoute + BackendTLSPolicy.
