@@ -69,6 +69,8 @@ spec:
             # Linux and Docker deployments
             - name: ZITI_BOOTSTRAP
               value: "false"
+          resources:
+            {{- toYaml .Values.initContainerResources | nindent 12 }}
           volumeMounts:
             - mountPath: {{ include "execMountDir" . }}/ziti-controller-init.bash
               name: ziti-controller-configmap
