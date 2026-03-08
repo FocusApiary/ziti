@@ -1,4 +1,4 @@
-.PHONY: help lint deploy deploy-metallb sync-images store-secrets configure-services configure-keycloak configure-oidc create-identities enroll-oidc-vms enroll-backup patch-coredns install-tunnel
+.PHONY: help lint deploy deploy-metallb sync-images sign-images store-secrets configure-services configure-keycloak configure-oidc create-identities enroll-oidc-vms enroll-backup patch-coredns install-tunnel
 
 help:
 	@echo "Targets:"
@@ -6,6 +6,7 @@ help:
 	@echo "  make deploy              — Deploy controller + router"
 	@echo "  make deploy-metallb      — Install MetalLB + IP pool"
 	@echo "  make sync-images         — Mirror upstream images to Harbor"
+	@echo "  make sign-images         — Notation-sign patched images in Harbor"
 	@echo "  make store-secrets       — Extract k8s secrets to AKV"
 	@echo "  make configure-services  — Create Ziti services + policies"
 	@echo "  make configure-keycloak  — Configure Keycloak OIDC client and roles for Ziti"
@@ -28,6 +29,9 @@ deploy-metallb:
 
 sync-images:
 	scripts/sync_images.sh
+
+sign-images:
+	scripts/sign_images.sh
 
 store-secrets:
 	scripts/store_secrets.sh
