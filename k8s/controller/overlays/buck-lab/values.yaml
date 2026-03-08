@@ -51,8 +51,45 @@ webBindingPki:
         name: letsencrypt-prod
       mountPath: /etc/ziti/alt-server-cert
 
-# NOTE: xweb v3.0.3 cannot share a port between two listeners (panics with
-# "handler for protocol[h2] already exists"). The OIDC enrollment endpoint
-# for enroll.focuspass.com is served via Envoy HTTPS Terminate + re-encrypt
-# with Host rewrite to ziti.focuspass.com. See envoy-gateway-k8s for the
-# HTTPRoute, BackendTLSPolicy, and dedicated LE cert.
+# NOTE: xweb v3.0.3 panics when two listeners share the SAME port
+# ("handler for protocol[h2] already exists"). The second listener below
+# uses a DIFFERENT port (1281) so it is safe.
+#
+# The upstream Helm chart hardcodes edge-oidc options: {} with no way to
+# customise redirect URIs. The iOS ZDE uses redirect_uri=ziti://callback
+# which is not in the controller's defaults (only openziti://auth/callback).
+# This second listener adds ziti://callback and serves OIDC enrollment
+# traffic routed from Envoy via the ziti-controller-enroll Service.
+additionalConfigs:
+  web:
+    - name: oidc-enrollment
+      bindPoints:
+        - interface: 0.0.0.0:1281
+          address: enroll.focuspass.com:443
+      identity:
+        cert:        /etc/ziti/web-client-identity/tls.crt
+        key:         /etc/ziti/web-client-identity/tls.key
+        server_cert: /etc/ziti/web-identity/tls.crt
+        server_key:  /etc/ziti/web-identity/tls.key
+        ca:          /etc/ziti/web-identity/ca.crt
+        alt_server_certs:
+          - server_cert: "/etc/ziti/alt-server-cert/tls.crt"
+            server_key:  "/etc/ziti/alt-server-cert/tls.key"
+      options:
+        idleTimeout: 5000ms
+        readTimeout: 5000ms
+        writeTimeout: 100000ms
+        minTLSVersion: TLS1.2
+        maxTLSVersion: TLS1.3
+      apis:
+        - binding: edge-client
+          options: {}
+        - binding: edge-oidc
+          options:
+            redirectURIs:
+              - "openziti://auth/callback"
+              - "ziti://callback"
+              - "https://127.0.0.1:*/auth/callback"
+              - "http://127.0.0.1:*/auth/callback"
+              - "https://localhost:*/auth/callback"
+              - "http://localhost:*/auth/callback"

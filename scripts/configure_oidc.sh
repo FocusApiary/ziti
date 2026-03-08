@@ -235,7 +235,7 @@ except: pass
     \"issuer\": \"${KC_ISSUER}\",
     \"certPem\": ${ESCAPED_CERT},
     \"audience\": \"openziti\",
-    \"clientId\": \"openziti-tunneler\",
+    \"clientId\": \"openziti\",
     \"claimsProperty\": \"email\",
     \"useExternalId\": true,
     \"enabled\": true,

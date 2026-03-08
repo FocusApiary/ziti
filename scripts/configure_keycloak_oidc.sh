@@ -95,7 +95,10 @@ fi
 
 log "--- Phase 1: OIDC Client ---"
 
-CLIENT_ID="openziti-tunneler"
+# The controller's OIDC handler only accepts client_id=openziti or native
+# (hardcoded in controller/oidc_auth/provider.go). ZDE sends client_id=openziti
+# to both the controller and Keycloak, so the Keycloak client must match.
+CLIENT_ID="openziti"
 
 client_exists=false
 if [[ -z "$DRY_RUN" ]]; then
@@ -109,12 +112,13 @@ if [[ "$client_exists" == "true" ]]; then
   log "Client '$CLIENT_ID' already exists — skipping"
 else
   log "Creating OIDC client: $CLIENT_ID"
+  # Redirect URIs must include ziti://callback for iOS ZDE and
+  # openziti://auth/callback for desktop ZDE.
   kc_exec create clients -r "$KC_REALM" -s "clientId=$CLIENT_ID" \
     -s 'publicClient=true' \
     -s 'standardFlowEnabled=true' \
     -s 'directAccessGrantsEnabled=false' \
-    -s 'redirectUris=["http://localhost:20314/auth/callback"]' \
-    -s 'webOrigins=["http://localhost:20314"]' \
+    -s 'redirectUris=["ziti://callback","openziti://auth/callback","https://127.0.0.1:*/auth/callback","http://127.0.0.1:*/auth/callback","https://localhost:*/auth/callback","http://localhost:*/auth/callback"]' \
     -s 'attributes={"pkce.code.challenge.method":"S256","access.token.lifespan":"300","client.offline.session.idle.timeout":"28800"}'
 fi
 
