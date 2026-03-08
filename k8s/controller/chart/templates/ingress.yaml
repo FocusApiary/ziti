@@ -1,0 +1,185 @@
+# disabled by default and shares a TLS listener and DNS SAN with the client API
+{{- if .Values.ctrlPlane.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-ctrl
+  labels:
+  {{- include "ziti-controller.labels" . | nindent 4 }}
+  {{- with .Values.ctrlPlane.ingress.labels }}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.ctrlPlane.ingress.annotations }}
+  annotations:
+  {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ctrlPlane.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.ctrlPlane.ingress.ingressClassName }}
+  {{- end }}
+  {{- if .Values.ctrlPlane.ingress.tls }}
+  tls:
+    {{- with .Values.ctrlPlane.ingress.tls }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.ctrlPlane.advertisedHost "context" .) | default (printf "%s-ctrl.%s.svc.%s" .Release.Name .Release.Namespace .Values.ca.clusterDomain) }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ziti-controller.fullname" . }}-ctrl
+                port:
+                  number: {{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.ctrlPlane.advertisedPort "context" .) }}
+{{- if and (hasKey .Values.ctrlPlane "dnsNames") (.Values.ctrlPlane.dnsNames) }}
+{{- range .Values.ctrlPlane.dnsNames }}
+    - host: {{ . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ziti-controller.fullname" . }}-ctrl
+                port:
+                  number: {{ .Values.ctrlPlane.advertisedPort }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.clientApi.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-client
+  labels:
+  {{- include "ziti-controller.labels" . | nindent 4 }}
+  {{- with .Values.clientApi.ingress.labels }}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.clientApi.ingress.annotations }}
+  annotations:
+  {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.clientApi.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.clientApi.ingress.ingressClassName }}
+  {{- end }}
+  {{- if .Values.clientApi.ingress.tls }}
+  tls:
+    {{- with .Values.clientApi.ingress.tls }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.clientApi.advertisedHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ziti-controller.fullname" . }}-client
+                port:
+                  number: {{ .Values.clientApi.advertisedPort }}
+{{- if and (hasKey .Values.clientApi "dnsNames") (.Values.clientApi.dnsNames) }}
+{{- range .Values.clientApi.dnsNames }}
+    - host: {{ . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ziti-controller.fullname" $ }}-client
+                port:
+                  number: {{ $.Values.clientApi.advertisedPort }}
+{{- end }}
+{{- end }}
+{{- if and (hasKey .Values.clientApi "altDnsNames") (.Values.clientApi.altDnsNames) }}
+{{- range .Values.clientApi.altDnsNames }}
+    - host: {{ . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ziti-controller.fullname" $ }}-client
+                port:
+                  number: {{ $.Values.clientApi.advertisedPort }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+# disabled by default and shares a TLS listener with the client API
+{{- if .Values.managementApi.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-mgmt
+  labels:
+  {{- include "ziti-controller.labels" . | nindent 4 }}
+  {{- with .Values.managementApi.ingress.labels }}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.managementApi.ingress.annotations }}
+  annotations:
+  {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.managementApi.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.managementApi.ingress.ingressClassName }}
+  {{- end }}
+  {{- if .Values.managementApi.ingress.tls }}
+  tls:
+    {{- with .Values.managementApi.ingress.tls }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.managementApi.advertisedHost "context" .) }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ziti-controller.fullname" . }}-mgmt
+                port:
+                  number: {{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.managementApi.advertisedPort "context" .) }}
+{{- if and (hasKey .Values.managementApi "dnsNames") (.Values.managementApi.dnsNames) }}
+{{- range .Values.managementApi.dnsNames }}
+    - host: {{ . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ziti-controller.fullname" $ }}-mgmt
+                port:
+                  number: {{ $.Values.managementApi.advertisedPort }}
+{{- end }}
+{{- end }}
+{{- if and (hasKey .Values.managementApi "altDnsNames") (.Values.managementApi.altDnsNames) }}
+{{- range .Values.managementApi.altDnsNames }}
+    - host: {{ . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ziti-controller.fullname" $ }}-mgmt
+                port:
+                  number: {{ $.Values.managementApi.advertisedPort }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,164 @@
+#######
+#
+# DEPRECATION NOTICE: The separate ctrl-plane root CA is deprecated. All leaf certificates are now issued from the
+# edge-signer-issuer. The ctrl-plane-root-cert and ctrl-plane-intermediate-cert resources below are orphaned
+# (helm.sh/resource-policy: keep) to preserve existing private keys for rollback purposes.
+#
+######
+
+{{- $mode := include "ziti-controller.clusterMode" . -}}
+
+{{- if eq (len .Values.ctrlPlane.alternativeIssuer) 0 }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-ctrl-plane-root-cert
+  annotations:
+    "helm.sh/resource-policy": keep
+    "openziti.io/deprecated": "true"
+    "openziti.io/deprecation-notice": "This resource is orphaned and no longer managed by Helm."
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  commonName: {{ include "ziti-controller.fullname" . }}-ctrl-plane-root
+  secretName: {{ include "ziti-controller.fullname" . }}-ctrl-plane-root-secret
+  isCA: true
+  duration: {{ .Values.ca.duration }}
+  renewBefore: {{ .Values.ca.renewBefore }}
+  usages:
+    - digital signature
+    - cert sign
+    - crl sign
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Never
+  issuerRef:
+    kind: Issuer
+    name: {{ include "ziti-controller.fullname" . }}-selfsigned-ca-issuer
+
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-ctrl-plane-root-issuer
+  annotations: {}
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ include "ziti-controller.fullname" . }}-ctrl-plane-root-secret
+{{- end }}  # end alternativeIssuer check
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-ctrl-plane-identity
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  commonName: {{ default (printf "%s-ctrl-plane-identity" (include "ziti-controller.fullname" .)) .Values.cluster.nodeName }}
+  subject:
+    organizations:
+      - {{ include "ziti-controller.serverCertSubjectOrganization" . | quote }}
+  secretName: {{ include "ziti-controller.fullname" . }}-ctrl-plane-identity-secret
+  isCA: false
+  duration: {{ .Values.cert.duration }}
+  renewBefore: {{ .Values.cert.renewBefore }}
+  privateKey:
+# It seems OSX has problems validating ECDSA tokens.. :-/
+#    algorithm: ECDSA
+#    size: 256
+    algorithm: RSA
+    size: 4096
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+    - content commitment
+    - key encipherment
+  # At least one of a DNS Name, URI, or IP address is required.
+  dnsNames:
+    - localhost
+    - ziti-controller
+    - {{ include "ziti-controller.fullname" . }}-ctrl
+    - {{ include "ziti-controller.fullname" . }}-ctrl.{{ .Release.Namespace }}
+    - {{ include "ziti-controller.fullname" . }}-ctrl.{{ .Release.Namespace }}.svc
+    - {{ include "ziti-controller.fullname" . }}-ctrl.{{ .Release.Namespace }}.svc.{{ .Values.ca.clusterDomain }}
+    {{- if .Values.ctrlPlane.advertisedHost }}
+    - {{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.ctrlPlane.advertisedHost "context" .) }}
+    {{- end }}
+    {{- if .Values.ctrlPlane.dnsNames }}
+      {{- range .Values.ctrlPlane.dnsNames }}
+    - {{ . | quote }}
+      {{- end }}
+    {{- end }}
+    {{/* add the client API's DNS SANs if client API does not have a separate PKI for web listeners, i.e., the enrollment signer is from the ctrl plane PKI  */}}
+    {{- if not .Values.webBindingPki.enabled }}
+    - {{ include "ziti-controller.fullname" . }}-client
+    - {{ include "ziti-controller.fullname" . }}-client.{{ .Release.Namespace }}
+    - {{ include "ziti-controller.fullname" . }}-client.{{ .Release.Namespace }}.svc
+    - {{ include "ziti-controller.fullname" . }}-client.{{ .Release.Namespace }}.svc.{{ .Values.ca.clusterDomain }}
+    - {{ .Values.clientApi.advertisedHost }}
+      {{- if .Values.clientApi.dnsNames }}
+        {{- range .Values.clientApi.dnsNames }}
+    - {{ . | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    {{/* add management API DNS SANs if management API does not have a separate PKI for web listeners */}}
+    {{- if and .Values.managementApi.service.enabled (not .Values.webBindingPki.enabled) }}
+    - {{ include "ziti-controller.fullname" . }}-mgmt
+    - {{ include "ziti-controller.fullname" . }}-mgmt.{{ .Release.Namespace }}
+    - {{ include "ziti-controller.fullname" . }}-mgmt.{{ .Release.Namespace }}.svc
+    - {{ include "ziti-controller.fullname" . }}-mgmt.{{ .Release.Namespace }}.svc.{{ .Values.ca.clusterDomain }}
+    {{- if .Values.managementApi.advertisedHost }}
+    - {{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.managementApi.advertisedHost "context" .) }}
+    {{- end }}
+    {{- if .Values.managementApi.dnsNames }}
+      {{- range .Values.managementApi.dnsNames }}
+    - {{ . | quote }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+  {{- if hasPrefix "cluster" $mode }}
+  uris:
+    - {{ include "ziti-controller.getSpiffeUri" . }}
+  {{- end }}
+  ipAddresses:
+    - 127.0.0.1
+    - "::1"
+  issuerRef:
+    kind: Issuer
+    name: {{ include "ziti-controller.fullname" . }}-edge-signer-issuer
+
+---
+# the controller's client certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-ctrl-plane-client-identity
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  isCA: false
+  commonName: {{ default (printf "%s-ctrl-plane-client-identity" (include "ziti-controller.fullname" .)) .Values.cluster.nodeName }}
+  secretName: {{ include "ziti-controller.fullname" . }}-ctrl-plane-client-identity-secret
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - client auth
+    - digital signature
+    - content commitment
+    - key encipherment
+  {{- if hasPrefix "cluster" $mode }}
+  uris:
+    - {{ include "ziti-controller.getSpiffeUri" . }}
+  {{- end }}
+  issuerRef:
+    kind: Issuer
+    name: {{ include "ziti-controller.fullname" . }}-edge-signer-issuer

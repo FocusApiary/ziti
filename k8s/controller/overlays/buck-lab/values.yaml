@@ -7,6 +7,17 @@ clientApi:
   # browsers hitting this hostname get the trusted LE cert automatically.
   altDnsNames:
     - enroll.focuspass.com
+  # OIDC redirect URIs for the main listener (port 1280). The upstream chart
+  # hardcodes edge-oidc options: {} — our patched chart template exposes this
+  # value. iOS ZDE requires ziti://callback which is not in the defaults.
+  oidcOptions:
+    redirectURIs:
+      - "openziti://auth/callback"
+      - "ziti://callback"
+      - "https://127.0.0.1:*/auth/callback"
+      - "http://127.0.0.1:*/auth/callback"
+      - "https://localhost:*/auth/callback"
+      - "http://localhost:*/auth/callback"
 
 ctrlPlane:
   advertisedHost: ziti.focuspass.com
@@ -51,15 +62,13 @@ webBindingPki:
         name: letsencrypt-prod
       mountPath: /etc/ziti/alt-server-cert
 
-# NOTE: xweb v3.0.3 panics when two listeners share the SAME port
-# ("handler for protocol[h2] already exists"). The second listener below
-# uses a DIFFERENT port (1281) so it is safe.
+# Second xweb listener for enroll.focuspass.com (LE cert, port 1281).
+# Provides a separate OIDC endpoint with an OS-trusted LE certificate for
+# browser-based enrollment. The main listener (port 1280) now also has the
+# correct redirect URIs via our patched chart template (clientApi.oidcOptions).
 #
-# The upstream Helm chart hardcodes edge-oidc options: {} with no way to
-# customise redirect URIs. The iOS ZDE uses redirect_uri=ziti://callback
-# which is not in the controller's defaults (only openziti://auth/callback).
-# This second listener adds ziti://callback and serves OIDC enrollment
-# traffic routed from Envoy via the ziti-controller-enroll Service.
+# NOTE: xweb v3.0.3 panics when two listeners share the SAME port
+# ("handler for protocol[h2] already exists"). Port 1281 is safe.
 additionalConfigs:
   web:
     - name: oidc-enrollment

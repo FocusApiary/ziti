@@ -1,0 +1,458 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-config
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+data:
+
+  ziti-controller-init.bash: |-
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # set -o xtrace  # DEBUG
+
+    if [[ -s "{{ include "dataMountDir" . }}/{{ .Values.dbFile }}" ]]; then
+      echo "INFO: noop because BoltDB exists in {{ include "dataMountDir" . }}/{{ .Values.dbFile }}"
+      exit 0
+    else
+      echo "INFO: initializing Ziti Controller"
+      ziti controller edge init \
+        "{{ include "configMountDir" . }}/ziti-controller.yaml" \
+        -u "${ZITI_ADMIN_USER}" \
+        -p "${ZITI_ADMIN_PASSWORD}"
+    fi
+
+  ziti-cluster-init.bash: |-
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # set -o xtrace  # DEBUG
+
+    MARKER="{{ include "ziti-controller.clusterMarkerFile" . }}"
+    if [[ -f "${MARKER}" ]]; then
+      echo "INFO: cluster already initialized - marker file ${MARKER} exists"
+      exit 0
+    else
+      echo "INFO: initializing Ziti Cluster"
+    fi
+
+    AGENT_ADDR="{{ .Values.cluster.agentAppAddr }}"
+
+    echo "INFO: waiting for controller agent at ${AGENT_ADDR} to respond..."
+    for i in $(seq 1 120); do
+      if ziti agent cluster list --app-addr "${AGENT_ADDR}" >/dev/null 2>&1; then
+        echo "INFO: CLI agent is responsive"
+        break
+      fi
+      sleep 2
+    done
+
+    # Perform cluster initialization (creates default admin identity)
+    echo "INFO: running: ziti agent cluster init ${ZITI_ADMIN_USER} ***** ${ZITI_ADMIN_USER}"
+    ziti agent cluster init --app-addr "${AGENT_ADDR}" "${ZITI_ADMIN_USER}" "${ZITI_ADMIN_PASSWORD}" "${ZITI_ADMIN_USER}"
+
+    # Verify credentials by attempting login
+    LOGIN_OK=0
+    for i in $(seq 1 120); do
+      if zitiLogin >/dev/null 2>&1; then
+        echo "INFO: ziti admin login succeeded"
+        LOGIN_OK=1
+        break
+      fi
+      sleep 2
+    done
+    if [[ ${LOGIN_OK} -ne 1 ]]; then
+      echo "ERROR: ziti admin login failed after timeout" >&2
+      exit 1
+    fi
+
+    # Mark as initialized
+    touch "${MARKER}"
+    echo "INFO: Ziti cluster initialized"
+
+  ziti-cluster-migrate.bash: |-
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # set -o xtrace  # DEBUG
+
+    MARKER="{{ include "ziti-controller.clusterMarkerFile" . }}"
+    if [[ -f "${MARKER}" ]]; then
+      echo "INFO: cluster already initialized - marker file ${MARKER} exists"
+      exit 0
+    fi
+
+    # Migration mode: Deployment is scaled to 0 and a one-shot Job runs this script.
+    # If this script completes successfully, mark the cluster as initialized.
+    echo "INFO: marking cluster initialized (migration mode via Job success)"
+    touch "${MARKER}"
+    echo "INFO: Ziti cluster initialized"
+
+  ziti-cluster-join.bash: |-
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # set -o xtrace  # DEBUG
+
+    MARKER="{{ include "ziti-controller.clusterMarkerFile" . }}"
+    if [[ -f "${MARKER}" ]]; then
+      echo "INFO: already joined cluster - marker file ${MARKER} exists"
+      exit 0
+    fi
+
+    AGENT_ADDR="{{ .Values.cluster.agentAppAddr }}"
+
+    echo "INFO: waiting for controller agent at ${AGENT_ADDR} to respond..."
+    for i in $(seq 1 120); do
+      if ziti agent cluster list --app-addr "${AGENT_ADDR}" >/dev/null 2>&1; then
+        echo "INFO: CLI agent is responsive"
+        break
+      fi
+      sleep 2
+    done
+
+    # Determine endpoint to join: prefer explicit cluster.endpoint, else fall back to ctrlPlane advertise
+    ENDPOINT="{{ .Values.cluster.endpoint }}"
+    echo "INFO: running: ziti agent cluster add --app-addr ${AGENT_ADDR} tls:${ENDPOINT}"
+    ziti agent cluster add --app-addr "${AGENT_ADDR}" "tls:${ENDPOINT}"
+
+    # Mark as joined
+    touch "${MARKER}"
+    echo "INFO: Ziti cluster join completed"
+
+  zitiLogin: |-
+    #!/usr/bin/env bash
+    ziti edge login "${ZITI_MGMT_API}" \
+      --username "${ZITI_ADMIN_USER}" \
+      --password "${ZITI_ADMIN_PASSWORD}" \
+      --ca "${ZITI_CTRL_PLANE_CA}/{{ include "ziti-controller.ctrlPlaneCasFile" . }}"
+
+  ziti-ready.bash: |-
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # set -o xtrace # DEBUG
+
+    MODE="{{ include "ziti-controller.clusterMode" . }}"
+    DATA_DIR="{{ include "dataMountDir" . }}"
+    CONFIG_DIR="{{ include "configMountDir" . }}"
+
+    # 1) For cluster modes, ensure the cluster marker exists
+    if [[ "${MODE}" =~ cluster-(migrate|init) ]]; then
+      MARKER="{{ include "ziti-controller.clusterMarkerFile" . }}"
+      if [[ ! -f "${MARKER}" ]]; then
+        echo "not ready: cluster marker missing: ${MARKER}" >&2
+        exit 1
+      fi
+    fi
+
+    # 2) Check agent responsiveness when in cluster modes
+    if [[ "${MODE}" == cluster-* ]]; then
+      AGENT_ADDR="{{ .Values.cluster.agentAppAddr }}"
+      if [[ -z "${AGENT_ADDR}" ]]; then
+        echo "not ready: CLI agent not responsive at <empty agentAppAddr>" >&2
+        exit 1
+      fi
+
+      agent_err="$(ziti agent cluster list --app-addr "${AGENT_ADDR}" 2>&1 >/dev/null || true)"
+      if [[ -n "${agent_err}" ]]; then
+        echo "not ready: CLI agent not responsive at ${AGENT_ADDR}; error: ${agent_err}" >&2
+        exit 1
+      fi
+    fi
+
+    # 3) Check TLS handshakes on enabled listeners (no cert verify, just handshake)
+    # 3a) Client API
+    HOST_CLIENT="{{ required "You must set .Values.clientApi.advertisedHost" .Values.clientApi.advertisedHost }}"
+    PORT_CLIENT="{{ .Values.clientApi.containerPort }}"
+    if ! echo | openssl s_client -connect "127.0.0.1:${PORT_CLIENT}" -servername "${HOST_CLIENT}" -alpn http/1.1 -ign_eof >/dev/null 2>&1; then
+      echo "not ready: client API TLS handshake failed on 127.0.0.1:${PORT_CLIENT}" >&2
+      exit 1
+    fi
+
+    # 3b) Ctrl Plane (if enabled)
+    {{- if .Values.ctrlPlane.service.enabled }}
+    PORT_CTRL="{{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.ctrlPlane.containerPort "context" .) }}"
+    HOST_CTRL="{{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.ctrlPlane.advertisedHost "context" .) }}"
+    if ! echo | openssl s_client -connect "127.0.0.1:${PORT_CTRL}" -servername "${HOST_CTRL}" -alpn ziti-ctrl -ign_eof >/dev/null 2>&1; then
+      echo "not ready: ctrl plane TLS handshake failed on 127.0.0.1:${PORT_CTRL}" >&2
+      exit 1
+    fi
+    {{- end }}
+
+    # 3c) Management API (if enabled)
+    {{- if .Values.managementApi.service.enabled }}
+    PORT_MGMT="{{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.managementApi.containerPort "context" .) }}"
+    HOST_MGMT="{{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.managementApi.advertisedHost "context" .) | default (printf "%s-mgmt.%s.svc.%s" .Release.Name .Release.Namespace .Values.ca.clusterDomain) }}"
+    if ! echo | openssl s_client -connect "127.0.0.1:${PORT_MGMT}" -servername "${HOST_MGMT}" -alpn http/1.1 -ign_eof >/dev/null 2>&1; then
+      echo "not ready: mgmt API TLS handshake failed on 127.0.0.1:${PORT_MGMT}" >&2
+      exit 1
+    fi
+    {{- end }}
+
+    echo "ready: all readiness checks passed"
+    exit 0
+
+  .bash_profile: |-
+    # customize ziggy's profile for login shells here
+    zitiLogin
+
+  ziti-controller.yaml: |-
+
+    v: 3
+
+    {{- $mode := include "ziti-controller.clusterMode" . }}
+    {{- if hasPrefix "cluster" $mode }}
+    cluster:
+      dataDir:              {{ include "dataMountDir" . }}/raft
+    {{- if eq $mode "cluster-migrate" }}
+    db:                     {{ include "dataMountDir" . }}/{{ .Values.dbFile }}
+    {{- end }}
+    {{- else }}
+    db:                     {{ include "dataMountDir" . }}/{{ .Values.dbFile }}
+    trustDomain:            ${ZITI_TRUST_DOMAIN}
+    {{- end }}
+
+    identity:
+      cert:                 {{ include "configMountDir" . }}/ctrl-plane-client-identity/tls.crt
+      key:                  {{ include "configMountDir" . }}/ctrl-plane-client-identity/tls.key
+      server_cert:          {{ include "configMountDir" . }}/ctrl-plane-identity/tls.crt
+      server_key:           {{ include "configMountDir" . }}/ctrl-plane-identity/tls.key
+      ca:                   ${ZITI_CTRL_PLANE_CA}/{{ include "ziti-controller.ctrlPlaneCasFile" . }}
+
+    {{- if and .Values.fabric.events.enabled (not .Values.additionalConfigs.events) }}
+    events:
+      jsonLogger:
+        subscriptions:
+          {{- .Values.fabric.events.subscriptions | toYaml | nindent 10 }}
+        handler:
+          type: file
+          format: json
+          path: {{ .Values.fabric.events.mountDir }}/{{ .Values.fabric.events.fileName }}
+    {{- end }}
+
+    {{- if .Values.additionalConfigs.events }}
+    events:
+    {{- .Values.additionalConfigs.events | toYaml | nindent 6 }}
+    {{- end }}
+
+    network:
+    {{- if .Values.fabric.events.enabled }}
+    {{- .Values.fabric.events.network | toYaml | nindent 6 }}
+    {{- end }}
+
+    {{- .Values.network | toYaml | nindent 6 }}
+
+    {{- if .Values.additionalConfigs.network }}
+    {{- .Values.additionalConfigs.network | toYaml | nindent 6 }}
+    {{- end }}
+
+    ctrl:
+      listener:                tls:0.0.0.0:{{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.ctrlPlane.containerPort "context" .) }}
+      options:
+        advertiseAddress: tls:{{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.ctrlPlane.advertisedHost "context" .) }}:{{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.ctrlPlane.advertisedPort "context" .) }}
+    {{- if .Values.additionalConfigs.ctrl }}
+    {{- .Values.additionalConfigs.ctrl | toYaml | nindent 6 }}
+    {{- end }}
+
+    healthChecks:
+      boltCheck:
+        interval: 30s
+        timeout: 20s
+        initialDelay: 30s
+    {{- if .Values.additionalConfigs.healthChecks }}
+    {{- .Values.additionalConfigs.healthChecks | toYaml | nindent 6 }}
+    {{- end }}
+
+    edge:
+      api:
+        sessionTimeout: 30m
+        address: {{ required "You must set .Values.clientApi.advertisedHost to a public DNS name or IP. Try adding --set clientApi.advertisedHost=edge.ziti.example.org to your Helm command" .Values.clientApi.advertisedHost }}:{{ .Values.clientApi.advertisedPort }}
+
+      enrollment:
+        signingCert:
+          cert: {{ include "configMountDir" . }}/edge-signer/tls.crt
+          key:  {{ include "configMountDir" . }}/edge-signer/tls.key
+        edgeIdentity:
+          duration: 180m
+        edgeRouter:
+          duration: 180m
+
+    {{- if .Values.additionalConfigs.edge }}
+    {{- .Values.additionalConfigs.edge | toYaml | nindent 6 }}
+    {{- end }}
+
+    web:
+      - name: client
+        bindPoints:
+          - interface: 0.0.0.0:{{ .Values.clientApi.containerPort }}
+            address: {{ required "You must set .Values.clientApi.advertisedHost to a Name/IP that is reachable by edge clients. Try adding --set clientApi.advertisedHost=edge.ziti.example.org to your Helm command" .Values.clientApi.advertisedHost }}:{{ .Values.clientApi.advertisedPort }}
+        {{- if .Values.webBindingPki.enabled }}
+        identity:
+          cert:        {{ include "configMountDir" . }}/web-client-identity/tls.crt
+          key:         {{ include "configMountDir" . }}/web-client-identity/tls.key
+          server_cert: {{ include "configMountDir" . }}/web-identity/tls.crt
+          server_key:  {{ include "configMountDir" . }}/web-identity/tls.key
+          ca:          {{ include "configMountDir" . }}/web-identity/ca.crt
+          {{- if gt (len .Values.webBindingPki.altServerCerts) 0 }}
+          alt_server_certs:
+          {{- range .Values.webBindingPki.altServerCerts }}
+            {{- if eq .mode "localFile" }}
+            - server_cert: {{ .serverCert | quote }}
+              server_key:  {{ .serverKey | quote }}
+            {{- else if eq .mode "secret" }}
+            {{- $matchingVolumeMountPath := include "ziti-controller.lookupVolumeMountPath" (dict "secretName" .secretName "additionalVolumes" $.Values.additionalVolumes) }}
+            - server_cert: {{ printf "%s/tls.crt" $matchingVolumeMountPath | quote }}
+              server_key:  {{ printf "%s/tls.key" $matchingVolumeMountPath | quote }}
+            {{- else if eq .mode "certManager" }}
+            {{- if .mountPath }}
+            - server_cert: {{ printf "%s/tls.crt" .mountPath | quote }}
+              server_key:  {{ printf "%s/tls.key" .mountPath | quote }}
+            {{- else }}
+            {{- fail (printf "Missing mountPath for certManager alt-server-cert: %v" .name) }}
+            {{- end }}
+          {{- end }}
+          {{- end }}
+        {{- end }}
+        {{- end }}
+        options:
+          idleTimeout: 5000ms  #http timeouts, new
+          readTimeout: 5000ms
+          writeTimeout: 100000ms
+          # minTLSVersion - optional, default TLS1.2
+          # The minimum version of TSL to support
+          minTLSVersion: {{ .Values.webBindingPki.minTLSVersion }}
+          # maxTLSVersion - optional, default TLS1.3
+          # The maximum version of TSL to support
+          maxTLSVersion: {{ .Values.webBindingPki.maxTLSVersion }}
+        # apis - required
+        # Allows one or more APIs to be bound to this webListener
+        apis:
+          - binding: edge-client
+            options: { }
+          - binding: edge-oidc
+            options: {{- if .Values.clientApi.oidcOptions }}
+              {{- .Values.clientApi.oidcOptions | toYaml | nindent 14 }}
+            {{- else }} { }
+            {{- end }}
+          {{- if not .Values.managementApi.service.enabled }}
+          - binding: edge-management
+            options: { }
+          - binding: fabric
+            options: { }
+          {{- if .Values.console.enabled }}
+          - binding: zac
+            options:
+              location: /ziti-console
+              indexFile: index.html
+          {{- end }}
+          {{- end }}
+
+    {{- if .Values.managementApi.service.enabled }}
+      - name: management
+        bindPoints:
+          - interface: 0.0.0.0:{{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.managementApi.containerPort "context" .) }}
+            address: {{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.managementApi.advertisedHost "context" .) | default (printf "%s-mgmt.%s.svc.%s" .Release.Name .Release.Namespace .Values.ca.clusterDomain) }}:{{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.managementApi.advertisedPort "context" .) }}
+        {{- if .Values.webBindingPki.enabled }}
+        identity:
+          cert:        {{ include "configMountDir" . }}/web-client-identity/tls.crt
+          key:         {{ include "configMountDir" . }}/web-client-identity/tls.key
+          server_cert: {{ include "configMountDir" . }}/web-mgmt-api/tls.crt
+          server_key:  {{ include "configMountDir" . }}/web-mgmt-api/tls.key
+          ca:          {{ include "configMountDir" . }}/web-mgmt-api/ca.crt
+          {{- if gt (len .Values.webBindingPki.altServerCerts) 0 }}
+          alt_server_certs:
+          {{- range .Values.webBindingPki.altServerCerts }}
+            {{- if eq .mode "localFile" }}
+            - server_cert: {{ .serverCert | quote }}
+              server_key:  {{ .serverKey | quote }}
+            {{- else if eq .mode "secret" }}
+            {{- $matchingVolumeMountPath := include "ziti-controller.lookupVolumeMountPath" (dict "secretName" .secretName "additionalVolumes" $.Values.additionalVolumes) }}
+            - server_cert: {{ printf "%s/tls.crt" $matchingVolumeMountPath | quote }}
+              server_key:  {{ printf "%s/tls.key" $matchingVolumeMountPath | quote }}
+            {{- else if eq .mode "certManager" }}
+            {{- if .mountPath }}
+            - server_cert: {{ printf "%s/tls.crt" .mountPath | quote }}
+              server_key:  {{ printf "%s/tls.key" .mountPath | quote }}
+            {{- else }}
+            {{- fail (printf "Missing mountPath for certManager alt-server-cert: %v" .name) }}
+            {{- end }}
+          {{- end }}
+          {{- end }}
+        {{- end }}
+        {{- end }}
+        options:
+          idleTimeout: 5000ms  #http timeouts, new
+          readTimeout: 5000ms
+          writeTimeout: 100000ms
+          # minTLSVersion - optional, default TLS1.2
+          # The minimum version of TSL to support
+          minTLSVersion: {{ .Values.webBindingPki.minTLSVersion }}
+          # maxTLSVersion - optional, default TLS1.3
+          # The maximum version of TSL to support
+          maxTLSVersion: {{ .Values.webBindingPki.maxTLSVersion }}
+        # apis - required
+        # Allows one or more APIs to be bound to this webListener
+        apis:
+          - binding: edge-client
+            options: { }
+          - binding: edge-oidc
+            options: { }
+          - binding: edge-management
+            options: { }
+          - binding: fabric
+            options: { }
+          - binding: health-checks
+            options: { }
+          {{- if .Values.console.enabled }}
+          - binding: zac
+            options:
+              location: /ziti-console
+              indexFile: index.html
+          {{- end }}
+    {{- end }}
+
+    {{- if .Values.prometheus.service.enabled }}
+      - name: prometheus-metrics
+        bindPoints:
+          - interface: 0.0.0.0:{{ .Values.prometheus.containerPort }}
+            address: {{ .Values.prometheus.advertisedHost | default (printf "%s-prometheus.%s.svc.%s" .Release.Name .Release.Namespace .Values.ca.clusterDomain) }}:{{ .Values.prometheus.advertisedPort }}
+        {{- if .Values.webBindingPki.enabled }}
+        identity:
+          cert:        {{ include "configMountDir" . }}/web-client-identity/tls.crt
+          key:         {{ include "configMountDir" . }}/web-client-identity/tls.key
+          server_cert: {{ include "configMountDir" . }}/web-prometheus-metrics/tls.crt
+          server_key:  {{ include "configMountDir" . }}/web-prometheus-metrics/tls.key
+          ca:          {{ include "configMountDir" . }}/web-prometheus-metrics/ca.crt
+          {{- if gt (len .Values.webBindingPki.altServerCerts) 0 }}
+          alt_server_certs:
+          {{ range .Values.webBindingPki.altServerCerts }}
+            {{- if eq .mode "localFile" }}
+            - cert: {{ .serverCert | quote }}
+              key: {{ .serverKey | quote }}
+            {{- else if eq .mode "secret" }}
+            {{- $matchingVolumeMountPath := include "ziti-controller.lookupVolumeMountPath" (dict "secretName" .secretName "additionalVolumes" $.Values.additionalVolumes) }}
+            - cert: {{ printf "%s/tls.crt" $matchingVolumeMountPath | quote }}
+              key: {{ printf "%s/tls.key" $matchingVolumeMountPath | quote }}
+            {{- else if eq .mode "certManager" }}
+            {{- if .mountPath }}
+            - cert: {{ printf "%s/tls.crt" .mountPath | quote }}
+              key: {{ printf "%s/tls.key" .mountPath | quote }}
+            {{- else }}
+            {{- fail (printf "Missing mountPath for certManager alt-server-cert: %v" .name) }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
+          {{- end }}
+        {{- end }}
+        options:
+          minTLSVersion: {{ .Values.prometheus.minTLSVersion }}
+          maxTLSVersion: {{ .Values.prometheus.maxTLSVersion }}
+        apis:
+          - binding: metrics
+            options: { }
+          - binding: health-checks
+            options: { }
+    {{- end }}
+
+    {{- if .Values.additionalConfigs.web }}
+    {{- .Values.additionalConfigs.web | toYaml | nindent 6 }}
+    {{- end }}
+

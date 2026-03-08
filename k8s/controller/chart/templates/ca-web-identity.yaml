@@ -1,0 +1,227 @@
+#######
+# CA that issues the server certificate for web bindings like the edge client API,
+# edge management API
+#
+# DEPRECATION NOTICE: The separate web-binding root CA is deprecated. All certificates are now issued
+# from the edge-signer-issuer. The web-root-cert and web-root-issuer resources below
+# are orphaned (helm.sh/resource-policy: keep) to preserve existing private keys for rollback purposes.
+# These resources will be removed in a future chart release.
+######
+{{- if (eq .Values.webBindingPki.enabled true) }}
+
+# DEPRECATED: web-binding root CA resources are orphaned and no longer used.
+# They are preserved with "helm.sh/resource-policy: keep" to allow rollback if needed.
+# These will be removed in a future chart release.
+{{- if eq (len .Values.webBindingPki.alternativeIssuer) 0 }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-web-root-cert
+  annotations:
+    "helm.sh/resource-policy": keep
+    "openziti.io/deprecated": "true"
+    "openziti.io/deprecation-notice": "This resource is orphaned and no longer managed by Helm."
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  commonName: {{ include "ziti-controller.fullname" . }}-web-root
+  secretName: {{ include "ziti-controller.fullname" . }}-web-root-secret
+  isCA: true
+  duration: {{ .Values.ca.duration }}
+  renewBefore: {{ .Values.ca.renewBefore }}
+  usages:
+    - digital signature
+    - cert sign
+    - crl sign
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Never
+  issuerRef:
+    kind: Issuer
+    name: {{ include "ziti-controller.fullname" . }}-selfsigned-ca-issuer
+
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-web-root-issuer
+  annotations: {}
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ include "ziti-controller.fullname" . }}-web-root-secret
+{{- end }}
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-web-identity-cert
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  commonName: {{ include "ziti-controller.fullname" . }}-web-identity
+  subject:
+    organizations:
+      - {{ include "ziti-controller.serverCertSubjectOrganization" . | quote }}
+  secretName: {{ include "ziti-controller.fullname" . }}-web-identity-secret
+  isCA: false
+  duration: {{ .Values.cert.duration }}
+  renewBefore: {{ .Values.cert.renewBefore }}
+  privateKey:
+# It seems OSX has problems validating ECDSA tokens.. :-/
+#    algorithm: ECDSA
+#    size: 256
+    algorithm: RSA
+    size: 4096
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+    - content commitment
+    - key encipherment
+  # At least one of a DNS Name, URI, or IP address is required.
+  dnsNames:
+    - localhost
+    - ziti-controller
+    {{- if .Values.clientApi.service.enabled }}
+    - {{ include "ziti-controller.fullname" . }}-client
+    - {{ include "ziti-controller.fullname" . }}-client.{{ .Release.Namespace }}
+    - {{ include "ziti-controller.fullname" . }}-client.{{ .Release.Namespace }}.svc
+    - {{ include "ziti-controller.fullname" . }}-client.{{ .Release.Namespace }}.svc.{{ .Values.ca.clusterDomain }}
+      {{- if .Values.clientApi.advertisedHost }}
+    - {{ .Values.clientApi.advertisedHost }}
+      {{- end }}
+      {{- if .Values.clientApi.dnsNames }}
+        {{- range .Values.clientApi.dnsNames }}
+    - {{ . | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  ipAddresses:
+    - 127.0.0.1
+    - "::1"
+  issuerRef:
+    kind: Issuer
+    name: {{ include "ziti-controller.fullname" . }}-edge-signer-issuer
+
+  {{- if .Values.managementApi.service.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-web-mgmt-api-cert
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  commonName: {{ include "ziti-controller.fullname" . }}-mgmt
+  subject:
+    organizations:
+      - {{ include "ziti-controller.serverCertSubjectOrganization" . | quote }}
+  secretName: {{ include "ziti-controller.fullname" . }}-web-mgmt-api-secret
+  isCA: false
+  duration: {{ .Values.cert.duration }}
+  renewBefore: {{ .Values.cert.renewBefore }}
+  privateKey:
+# It seems OSX has problems validating ECDSA tokens.. :-/
+#    algorithm: ECDSA
+#    size: 256
+    algorithm: RSA
+    size: 4096
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+    - content commitment
+    - key encipherment
+  # At least one of a DNS Name, URI, or IP address is required.
+  dnsNames:
+    - localhost
+    - {{ include "ziti-controller.fullname" . }}-mgmt
+    - {{ include "ziti-controller.fullname" . }}-mgmt.{{ .Release.Namespace }}
+    - {{ include "ziti-controller.fullname" . }}-mgmt.{{ .Release.Namespace }}.svc
+    - {{ include "ziti-controller.fullname" . }}-mgmt.{{ .Release.Namespace }}.svc.{{ .Values.ca.clusterDomain }}
+    - {{ include "ziti-controller.tplOrLiteral" (dict "value" .Values.managementApi.advertisedHost "context" .) }}
+      {{- if gt (len .Values.managementApi.dnsNames) 0 }}
+        {{- range .Values.managementApi.dnsNames }}
+    - {{ . | quote }}
+        {{- end }}
+      {{- end }}
+  ipAddresses:
+    - 127.0.0.1
+    - "::1"
+  issuerRef:
+    kind: Issuer
+    name: {{ include "ziti-controller.fullname" . }}-edge-signer-issuer
+  {{- end }}
+
+  {{- if .Values.prometheus.service.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-web-prometheus-metrics-cert
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  commonName: {{ include "ziti-controller.fullname" . }}-prometheus
+  subject:
+    organizations:
+      - {{ include "ziti-controller.serverCertSubjectOrganization" . | quote }}
+  secretName: {{ include "ziti-controller.fullname" . }}-web-prometheus-metrics-secret
+  isCA: false
+  duration: {{ .Values.cert.duration }}
+  renewBefore: {{ .Values.cert.renewBefore }}
+  privateKey:
+# It seems OSX has problems validating ECDSA tokens.. :-/
+#    algorithm: ECDSA
+#    size: 256
+    algorithm: RSA
+    size: 4096
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+    - content commitment
+    - key encipherment
+  # At least one of a DNS Name, URI, or IP address is required.
+  dnsNames:
+    - localhost
+    - {{ .Values.prometheus.advertisedHost | default (printf "%s-prometheus.%s.svc.%s" .Release.Name .Release.Namespace .Values.ca.clusterDomain) }}
+  ipAddresses:
+    - 127.0.0.1
+    - "::1"
+  issuerRef:
+    kind: Issuer
+    name: {{ include "ziti-controller.fullname" . }}-edge-signer-issuer
+  {{- end }}
+
+---
+# the controller's web client identity
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ziti-controller.fullname" . }}-web-client-identity
+  labels:
+    {{- include "ziti-controller.labels" . | nindent 4 }}
+spec:
+  isCA: false
+  commonName: {{ include "ziti-controller.fullname" . }}-web-client-identity
+  secretName: {{ include "ziti-controller.fullname" . }}-web-client-identity-secret
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - client auth
+    - digital signature
+    - content commitment
+    - key encipherment
+  issuerRef:
+    kind: Issuer
+    name: {{ include "ziti-controller.fullname" . }}-edge-signer-issuer
+
+{{- end }}
