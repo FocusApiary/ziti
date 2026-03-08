@@ -26,7 +26,7 @@ VM_NAMESPACE="igpu-vms"
 OIDC_USERS=(
   "seanh@focuspass.com|seanh-oidc|member,engineering,infra-admin,openclaw-admin"
   "sconejos@focuspass.com|sconejos-oidc|member,engineering"
-  "mrh@focuspass.com|mrh-oidc|member,engineering"
+  "mrh@focuspass.com|mrh-oidc|member,engineering,infra-admin"
   "abdulrehman@focuspass.com|abdulrehman-oidc|member,engineering"
   "azlankhan@focuspass.com|azlankhan-oidc|member,engineering"
   "mahakhan@focuspass.com|mahakhan-oidc|member"

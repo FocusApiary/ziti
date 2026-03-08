@@ -231,7 +231,7 @@ log "--- Phase 5: User Role Assignments ---"
 USER_ROLES=(
   "seanh@focuspass.com|member engineering infra-admin openclaw-admin"
   "sconejos@focuspass.com|member engineering"
-  "mrh@focuspass.com|member engineering"
+  "mrh@focuspass.com|member engineering infra-admin"
   "abdulrehman@focuspass.com|member engineering"
   "azlankhan@focuspass.com|member engineering"
   "mahakhan@focuspass.com|member"
