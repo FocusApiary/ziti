@@ -227,7 +227,8 @@ import sys, json
 try:
     items = json.load(sys.stdin).get('data', [])
     if items: print(items[0]['id'])
-except: pass
+except Exception as e:
+    print(f'WARNING: {e}', file=sys.stderr)
 " 2>/dev/null || true)
 
   SIGNER_BODY="{
@@ -277,8 +278,8 @@ try:
     items = data.get('data', [])
     if items:
         print(items[0]['id'])
-except Exception:
-    pass
+except Exception as e:
+    print(f'WARNING: {e}', file=sys.stderr)
 " <<< "$signer_json" 2>/dev/null || true)"
 
   if [[ -z "$SIGNER_ID" ]]; then
@@ -310,8 +311,8 @@ try:
     items = data.get('data', [])
     if items:
         print(items[0]['id'])
-except Exception:
-    pass
+except Exception as e:
+    print(f'WARNING: {e}', file=sys.stderr)
 " <<< "$policy_json" 2>/dev/null || true)"
 
   if [[ -z "$AUTH_POLICY_ID" ]]; then

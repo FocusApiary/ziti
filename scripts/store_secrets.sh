@@ -106,8 +106,8 @@ try:
   exp = payload.get("exp")
   if exp:
     print(exp)
-except Exception:
-  pass
+except Exception as e:
+  print(f"WARNING: {e}", file=sys.stderr)
 PY
 )"
   NOW_EPOCH="$(date +%s)"
