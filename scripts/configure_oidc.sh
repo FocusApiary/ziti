@@ -26,7 +26,7 @@ VM_NAMESPACE="igpu-vms"
 OIDC_USERS=(
   "seanh@focuspass.com|seanh-oidc|member,engineering,infra-admin,openclaw-admin"
   "sconejos@focuspass.com|sconejos-oidc|member,engineering"
-  "mrh@focuspass.com|mrh-oidc|member,engineering,infra-admin"
+  "mrh@focuspass.com|mrh-oidc|member,engineering"
   "abdulrehman@focuspass.com|abdulrehman-oidc|member,engineering"
   "azlankhan@focuspass.com|azlankhan-oidc|member,engineering"
   "mahakhan@focuspass.com|mahakhan-oidc|member"
@@ -181,45 +181,36 @@ mkdir -p "$OUT_DIR"
 log "--- Phase 1: ext-jwt-signer ---"
 
 SIGNER_NAME="keycloak-omlabs"
+AUTH_POLICY_NAME="oidc-keycloak"
 
-KC_INTERNAL_JWKS="http://slidee-kc-service.keycloak.svc.cluster.local:8080/realms/omlabs/protocol/openid-connect/certs"
 KC_ISSUER="https://auth.focuspass.com/realms/omlabs"
-KC_AUTH_URL="https://auth.focuspass.com/realms/omlabs/protocol/openid-connect/auth"
+KC_JWKS_URL="https://auth.focuspass.com/realms/omlabs/protocol/openid-connect/certs"
+KC_EXTERNAL_AUTH_URL="$KC_ISSUER"
 
-# Fetch the signing cert from Keycloak's internal JWKS endpoint so the
-# controller never needs external access to auth.focuspass.com.
-log "Fetching signing cert from internal Keycloak JWKS..."
+# Resolve an existing auth-policy ID up front so the signer can point at the
+# correct enrollment policy during updates. If the policy does not exist yet we
+# create it in Phase 2 and update the signer again afterwards.
+EXISTING_AUTH_POLICY_ID=""
 if [[ -z "$DRY_RUN" ]]; then
-  KC_CERT_PEM=$(kubectl -n ziti exec "$CTRL_POD" -c ziti-controller -- \
-    curl -sf "$KC_INTERNAL_JWKS" 2>/dev/null \
-    | python3 -c "
-import sys, json, textwrap
-data = json.load(sys.stdin)
-for key in data['keys']:
-    if key.get('use') == 'sig' and 'x5c' in key:
-        der_b64 = key['x5c'][0]
-        pem = '-----BEGIN CERTIFICATE-----\n' + '\n'.join(textwrap.wrap(der_b64, 64)) + '\n-----END CERTIFICATE-----'
-        print(pem)
-        break
-")
-
-  if [[ -z "$KC_CERT_PEM" ]]; then
-    warn "Could not fetch signing cert from Keycloak JWKS -- cannot continue"
-    exit 1
-  fi
-  log "Got signing cert ($(echo "$KC_CERT_PEM" | wc -c) bytes)"
+  existing_policy_json="$(curl_mgmt "GET" "/auth-policies?filter=name%3D%22${AUTH_POLICY_NAME}%22" "" "$ADMIN_TOKEN")"
+  EXISTING_AUTH_POLICY_ID="$(python3 -c "
+import json, sys
+try:
+    items = json.loads(sys.stdin.read()).get('data', [])
+    if items:
+        print(items[0]['id'])
+except Exception:
+    pass
+" <<< "$existing_policy_json" 2>/dev/null || true)"
 fi
 
-# Create or update the ext-jwt-signer via REST API.
-# The CLI's create command doesn't support certPem, so we use the REST API
-# directly. certPem is used instead of jwksEndpoint so the controller never
-# needs to reach auth.focuspass.com externally.
+# Create or update the ext-jwt-signer via REST API using OIDC discovery via
+# jwksEndpoint and issuer URLs. This keeps the signer aligned with the Desktop
+# Edge browser flow and avoids stale pinned cert data.
 log "Creating/updating ext-jwt-signer: $SIGNER_NAME"
 if [[ -n "$DRY_RUN" ]]; then
-  echo "  [dry-run] POST/PUT /edge/management/v1/external-jwt-signers (certPem from internal JWKS)"
+  echo "  [dry-run] POST/PUT /edge/management/v1/external-jwt-signers (issuer/jwksEndpoint OIDC config)"
 else
-  ESCAPED_CERT=$(python3 -c "import json; print(json.dumps('''$KC_CERT_PEM'''))")
-
   # Check if signer already exists.
   EXISTING_SIGNER=$(curl_mgmt "GET" "/external-jwt-signers?filter=name%3D%22${SIGNER_NAME}%22" "" "$ADMIN_TOKEN")
   EXISTING_ID=$(echo "$EXISTING_SIGNER" | python3 -c "
@@ -227,26 +218,37 @@ import sys, json
 try:
     items = json.load(sys.stdin).get('data', [])
     if items: print(items[0]['id'])
-except Exception as e:
-    print(f'WARNING: {e}', file=sys.stderr)
+except: pass
 " 2>/dev/null || true)
 
-  SIGNER_BODY="{
-    \"name\": \"keycloak-omlabs\",
-    \"issuer\": \"${KC_ISSUER}\",
-    \"certPem\": ${ESCAPED_CERT},
-    \"audience\": \"openziti\",
-    \"clientId\": \"openziti\",
-    \"claimsProperty\": \"email\",
-    \"useExternalId\": true,
-    \"enabled\": true,
-    \"externalAuthUrl\": \"${KC_AUTH_URL}\",
-    \"scopes\": [\"openid\", \"profile\", \"email\", \"offline_access\"],
-    \"enrollToCertEnabled\": true,
-    \"enrollToTokenEnabled\": true,
-    \"enrollNameClaimsSelector\": \"/email\",
-    \"enrollAttributeClaimsSelector\": \"/realm_roles\"
-  }"
+  SIGNER_BODY="$(EXISTING_AUTH_POLICY_ID="$EXISTING_AUTH_POLICY_ID" python3 - <<'PY'
+import json
+import os
+
+body = {
+    "name": "keycloak-omlabs",
+    "issuer": "https://auth.focuspass.com/realms/omlabs",
+    "jwksEndpoint": "https://auth.focuspass.com/realms/omlabs/protocol/openid-connect/certs",
+    "audience": "openziti",
+    "clientId": "openziti-tunneler",
+    "claimsProperty": "email",
+    "useExternalId": True,
+    "enabled": True,
+    "externalAuthUrl": "https://auth.focuspass.com/realms/omlabs",
+    "scopes": ["openid", "profile", "email", "offline_access"],
+    "targetToken": "ACCESS",
+    "enrollToCertEnabled": True,
+    "enrollToTokenEnabled": True,
+    "enrollNameClaimsSelector": "/email",
+    "enrollAttributeClaimsSelector": "/realm_roles",
+}
+
+if os.environ.get("EXISTING_AUTH_POLICY_ID"):
+    body["enrollAuthPolicyId"] = os.environ["EXISTING_AUTH_POLICY_ID"]
+
+print(json.dumps(body))
+PY
+)"
 
   if [[ -n "$EXISTING_ID" ]]; then
     log "Signer '$SIGNER_NAME' exists (id=$EXISTING_ID) -- updating via PUT"
@@ -263,8 +265,6 @@ fi
 
 log "--- Phase 2: auth-policy ---"
 
-AUTH_POLICY_NAME="oidc-keycloak"
-
 # Resolve signer ID via REST API.
 log "Resolving ext-jwt-signer ID for $SIGNER_NAME"
 SIGNER_ID=""
@@ -278,8 +278,8 @@ try:
     items = data.get('data', [])
     if items:
         print(items[0]['id'])
-except Exception as e:
-    print(f'WARNING: {e}', file=sys.stderr)
+except Exception:
+    pass
 " <<< "$signer_json" 2>/dev/null || true)"
 
   if [[ -z "$SIGNER_ID" ]]; then
@@ -292,17 +292,65 @@ fi
 
 log "Creating auth-policy: $AUTH_POLICY_NAME"
 if [[ -n "$DRY_RUN" ]]; then
-  echo "  [dry-run] ziti edge create auth-policy '${AUTH_POLICY_NAME}' --primary-ext-jwt-allowed --primary-ext-jwt-allowed-signers <SIGNER_ID>"
+  echo "  [dry-run] POST/PUT /edge/management/v1/auth-policies (primary ext-jwt allowed via <SIGNER_ID>)"
 else
-  ziti_exec "create auth-policy '${AUTH_POLICY_NAME}' \
-    --primary-ext-jwt-allowed \
-    --primary-ext-jwt-allowed-signers '${SIGNER_ID}'"
+  EXISTING_POLICY_JSON="$(curl_mgmt "GET" "/auth-policies?filter=name%3D%22${AUTH_POLICY_NAME}%22" "" "$ADMIN_TOKEN")"
+  EXISTING_POLICY_ID="$(python3 -c "
+import json, sys
+try:
+    items = json.loads(sys.stdin.read()).get('data', [])
+    if items:
+        print(items[0]['id'])
+except Exception:
+    pass
+" <<< "$EXISTING_POLICY_JSON" 2>/dev/null || true)"
+
+  AUTH_POLICY_BODY="$(SIGNER_ID="$SIGNER_ID" python3 - <<'PY'
+import json
+import os
+
+print(json.dumps({
+    "name": "oidc-keycloak",
+    "primary": {
+        "cert": {
+            "allowed": True,
+            "allowExpiredCerts": False,
+        },
+        "extJwt": {
+            "allowed": True,
+            "allowedSigners": [os.environ["SIGNER_ID"]],
+        },
+        "updb": {
+            "allowed": False,
+            "lockoutDurationMinutes": 0,
+            "maxAttempts": 0,
+            "minPasswordLength": 5,
+            "requireMixedCase": False,
+            "requireNumberChar": False,
+            "requireSpecialChar": False,
+        },
+    },
+    "secondary": {
+        "requireTotp": False,
+    },
+    "tags": {},
+}))
+PY
+)"
+
+  if [[ -n "$EXISTING_POLICY_ID" ]]; then
+    log "Auth-policy '$AUTH_POLICY_NAME' exists (id=$EXISTING_POLICY_ID) -- updating via PUT"
+    curl_mgmt "PUT" "/auth-policies/${EXISTING_POLICY_ID}" "$AUTH_POLICY_BODY" "$ADMIN_TOKEN" >/dev/null
+  else
+    log "Creating auth-policy '$AUTH_POLICY_NAME' via POST"
+    curl_mgmt "POST" "/auth-policies" "$AUTH_POLICY_BODY" "$ADMIN_TOKEN" >/dev/null
+  fi
 fi
 
 # Resolve auth-policy ID for identity creation.
 AUTH_POLICY_ID=""
 if [[ -z "$DRY_RUN" ]]; then
-  policy_json="$(ziti_exec_capture "list auth-policies 'name=\"${AUTH_POLICY_NAME}\"' -j")"
+  policy_json="$(curl_mgmt "GET" "/auth-policies?filter=name%3D%22${AUTH_POLICY_NAME}%22" "" "$ADMIN_TOKEN")"
 
   AUTH_POLICY_ID="$(python3 -c "
 import json, sys
@@ -311,8 +359,8 @@ try:
     items = data.get('data', [])
     if items:
         print(items[0]['id'])
-except Exception as e:
-    print(f'WARNING: {e}', file=sys.stderr)
+except Exception:
+    pass
 " <<< "$policy_json" 2>/dev/null || true)"
 
   if [[ -z "$AUTH_POLICY_ID" ]]; then
@@ -325,6 +373,34 @@ except Exception as e:
   else
     log "Resolved auth-policy ID: $AUTH_POLICY_ID"
   fi
+
+  log "Updating ext-jwt-signer enrollment auth-policy binding"
+  SIGNER_BODY="$(AUTH_POLICY_ID="$AUTH_POLICY_ID" python3 - <<'PY'
+import json
+import os
+
+print(json.dumps({
+    "name": "keycloak-omlabs",
+    "issuer": "https://auth.focuspass.com/realms/omlabs",
+    "jwksEndpoint": "https://auth.focuspass.com/realms/omlabs/protocol/openid-connect/certs",
+    "audience": "openziti",
+    "clientId": "openziti-tunneler",
+    "claimsProperty": "email",
+    "useExternalId": True,
+    "enabled": True,
+    "externalAuthUrl": "https://auth.focuspass.com/realms/omlabs",
+    "scopes": ["openid", "profile", "email", "offline_access"],
+    "targetToken": "ACCESS",
+    "enrollToCertEnabled": True,
+    "enrollToTokenEnabled": True,
+    "enrollNameClaimsSelector": "/email",
+    "enrollAttributeClaimsSelector": "/realm_roles",
+    "enrollAuthPolicyId": os.environ["AUTH_POLICY_ID"],
+    "tags": {},
+}))
+PY
+)"
+  curl_mgmt "PUT" "/external-jwt-signers/${SIGNER_ID}" "$SIGNER_BODY" "$ADMIN_TOKEN" >/dev/null
 fi
 
 # ============================================================================
