@@ -122,11 +122,11 @@ data:
     }
 
     urlencode() {
-      python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+      jq -nr --arg v "$1" '$v|@uri'
     }
 
     first_id() {
-      python3 -c 'import json,sys; data=json.load(sys.stdin); items=data.get("data", []); print(items[0]["id"] if items else "")'
+      jq -r '.data[0].id // ""'
     }
 
     http_body() {
@@ -176,12 +176,40 @@ data:
     }
 
     build_auth_body() {
-      python3 -c 'import json,os; print(json.dumps({"username": os.environ["ZITI_ADMIN_USER"], "password": os.environ["ZITI_ADMIN_PASSWORD"]}))'
+      jq -nc --arg username "$ZITI_ADMIN_USER" --arg password "$ZITI_ADMIN_PASSWORD" '{username: $username, password: $password}'
     }
 
     build_auth_policy_body() {
       signer_id="$1"
-      SIGNER_ID="$signer_id" AUTH_POLICY_NAME="$auth_policy_name" python3 -c 'import json,os; print(json.dumps({"name": os.environ["AUTH_POLICY_NAME"], "primary": {"cert": {"allowed": True, "allowExpiredCerts": False}, "extJwt": {"allowed": True, "allowedSigners": [os.environ["SIGNER_ID"]] if os.environ["SIGNER_ID"] else []}, "updb": {"allowed": False, "lockoutDurationMinutes": 0, "maxAttempts": 0, "minPasswordLength": 5, "requireMixedCase": False, "requireNumberChar": False, "requireSpecialChar": False}}, "secondary": {"requireTotp": False}, "tags": {}}))'
+      jq -nc \
+        --arg name "$auth_policy_name" \
+        --arg signer_id "$signer_id" \
+        '{
+          name: $name,
+          primary: {
+            cert: {
+              allowed: true,
+              allowExpiredCerts: false
+            },
+            extJwt: {
+              allowed: true,
+              allowedSigners: (if $signer_id == "" then [] else [$signer_id] end)
+            },
+            updb: {
+              allowed: false,
+              lockoutDurationMinutes: 0,
+              maxAttempts: 0,
+              minPasswordLength: 5,
+              requireMixedCase: false,
+              requireNumberChar: false,
+              requireSpecialChar: false
+            }
+          },
+          secondary: {
+            requireTotp: false
+          },
+          tags: {}
+        }'
     }
 
     build_signer_body() {
@@ -193,21 +221,59 @@ data:
       EXTERNAL_AUTH_URL="$external_auth_url" \
       CLIENT_ID="$client_id" \
       AUDIENCE="$audience" \
-      python3 -c 'import json,os; body = {"name": os.environ["SIGNER_NAME"], "issuer": os.environ["ISSUER"], "jwksEndpoint": os.environ["JWKS_ENDPOINT"], "audience": os.environ["AUDIENCE"], "clientId": os.environ["CLIENT_ID"], "claimsProperty": "email", "useExternalId": True, "enabled": True, "externalAuthUrl": os.environ["EXTERNAL_AUTH_URL"], "scopes": ["openid", "profile", "email", "offline_access"], "targetToken": "ACCESS", "enrollToCertEnabled": True, "enrollToTokenEnabled": True, "enrollNameClaimsSelector": "/email", "enrollAttributeClaimsSelector": "/realm_roles", "tags": {}}; body.update({"enrollAuthPolicyId": os.environ["ENROLL_AUTH_POLICY_ID"]} if os.environ.get("ENROLL_AUTH_POLICY_ID") else {}); print(json.dumps(body))'
+      jq -nc \
+        --arg name "$signer_name" \
+        --arg issuer "$issuer" \
+        --arg jwks "$jwks_endpoint" \
+        --arg audience "$audience" \
+        --arg client_id "$client_id" \
+        --arg external_auth_url "$external_auth_url" \
+        --arg enroll_auth_policy_id "$enroll_auth_policy_id" \
+        '{
+          name: $name,
+          issuer: $issuer,
+          jwksEndpoint: $jwks,
+          audience: $audience,
+          clientId: $client_id,
+          claimsProperty: "email",
+          useExternalId: true,
+          enabled: true,
+          externalAuthUrl: $external_auth_url,
+          scopes: ["openid", "profile", "email", "offline_access"],
+          targetToken: "ACCESS",
+          enrollToCertEnabled: true,
+          enrollToTokenEnabled: true,
+          enrollNameClaimsSelector: "/email",
+          enrollAttributeClaimsSelector: "/realm_roles",
+          tags: {}
+        } + (if $enroll_auth_policy_id == "" then {} else {enrollAuthPolicyId: $enroll_auth_policy_id} end)'
     }
 
     build_identity_body() {
       email="$1"
       name="$2"
       attrs="$3"
-      AUTH_POLICY_ID="$auth_policy_id" EMAIL="$email" NAME="$name" ATTRS="$attrs" python3 -c 'import json,os; attrs = [item for item in os.environ["ATTRS"].split(",") if item]; print(json.dumps({"name": os.environ["NAME"], "type": "Default", "isAdmin": False, "authPolicyId": os.environ["AUTH_POLICY_ID"], "externalId": os.environ["EMAIL"], "roleAttributes": attrs, "tags": {}}))'
+      jq -nc \
+        --arg name "$name" \
+        --arg email "$email" \
+        --arg auth_policy_id "$auth_policy_id" \
+        --arg attrs "$attrs" \
+        '{
+          name: $name,
+          type: "Default",
+          isAdmin: false,
+          authPolicyId: $auth_policy_id,
+          externalId: $email,
+          roleAttributes: ($attrs | split(",") | map(select(length > 0))),
+          tags: {}
+        }'
     }
 
     log_json "auth_start"
     auth_response="$(curl -sk -X POST "$controller/edge/management/v1/authenticate?method=password" \
       -H 'Content-Type: application/json' \
       -d "$(build_auth_body)")"
-    TOKEN="$(printf '%s' "$auth_response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["token"])')"
+    TOKEN="$(printf '%s' "$auth_response" | jq -r '.data.token // ""')"
 
     if [ -z "$TOKEN" ]; then
       log_json "auth_failed"
@@ -224,7 +290,7 @@ data:
       log_json "auth_policy_create"
       create_policy_body="$(build_auth_policy_body "")"
       policy_create_json="$(api_json POST "/auth-policies" "$create_policy_body" 201)"
-      auth_policy_id="$(printf '%s' "$policy_create_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["id"])')"
+      auth_policy_id="$(printf '%s' "$policy_create_json" | jq -r '.data.id // ""')"
     else
       log_json "auth_policy_present"
     fi
@@ -237,7 +303,7 @@ data:
     if [ -z "$signer_id" ]; then
       log_json "signer_create"
       signer_create_json="$(api_json POST "/external-jwt-signers" "$signer_body" 201)"
-      signer_id="$(printf '%s' "$signer_create_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["id"])')"
+      signer_id="$(printf '%s' "$signer_create_json" | jq -r '.data.id // ""')"
     else
       log_json "signer_update"
       api_json PUT "/external-jwt-signers/$signer_id" "$signer_body" >/dev/null
@@ -268,7 +334,7 @@ data:
     done
 
     client_signer_json="$(curl -sk "$controller/edge/client/v1/external-jwt-signers")"
-    client_external_auth_url="$(printf '%s' "$client_signer_json" | python3 -c "import json,sys; data=json.load(sys.stdin).get('data', []); print(data[0].get('externalAuthUrl', '') if data else '')")"
+    client_external_auth_url="$(printf '%s' "$client_signer_json" | jq -r '.data[0].externalAuthUrl // ""')"
 
     if [ "$client_external_auth_url" != "$external_auth_url" ]; then
       log_json "client_payload_mismatch"
