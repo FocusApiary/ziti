@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ziti-oidc-reconcile-sync
+  namespace: ziti
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      automountServiceAccountToken: false
+      serviceAccountName: openziti-sa
+      restartPolicy: OnFailure
+      securityContext:
+        runAsUser: 2171
+        runAsGroup: 2171
+        runAsNonRoot: true
+      containers:
+        - name: oidc-reconcile
+          image: harbor.focuscell.org/infra/ziti-controller:2.0.0-pre2-patched
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/scripts/oidc-reconcile.sh"]
+          env:
+            - name: ZITI_MGMT_URL
+              value: "https://ziti-controller-client.ziti.svc.cluster.local:443"
+            - name: ZITI_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ziti-controller-admin-secret
+                  key: admin-user
+            - name: ZITI_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ziti-controller-admin-secret
+                  key: admin-password
+          resources:
+            requests:
+              cpu: 30m
+              memory: 96Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      imagePullSecrets:
+        - name: harbor-pull-secret
+      volumes:
+        - name: scripts
+          configMap:
+            name: ziti-ops-automation-scripts
+            defaultMode: 0555
