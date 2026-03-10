@@ -97,3 +97,182 @@ data:
 
       sleep 5
     done
+  oidc-reconcile.sh: |
+    #!/bin/sh
+    set -eu
+
+    controller="${ZITI_MGMT_URL:-https://ziti-controller-client.ziti.svc.cluster.local:443}"
+    signer_name="${ZITI_OIDC_SIGNER_NAME:-keycloak-omlabs}"
+    auth_policy_name="${ZITI_OIDC_AUTH_POLICY_NAME:-oidc-keycloak}"
+    issuer="${ZITI_OIDC_ISSUER:-https://auth.focuspass.com/realms/omlabs}"
+    jwks_endpoint="${ZITI_OIDC_JWKS_ENDPOINT:-https://auth.focuspass.com/realms/omlabs/protocol/openid-connect/certs}"
+    external_auth_url="${ZITI_OIDC_EXTERNAL_AUTH_URL:-https://auth.focuspass.com/realms/omlabs}"
+    client_id="${ZITI_OIDC_CLIENT_ID:-openziti-tunneler}"
+    audience="${ZITI_OIDC_AUDIENCE:-openziti}"
+    oidc_users="${ZITI_OIDC_USERS:-seanh@focuspass.com|seanh-oidc|member,engineering,infra-admin,openclaw-admin
+    sconejos@focuspass.com|sconejos-oidc|member,engineering
+    mrh@focuspass.com|mrh-oidc|member,engineering
+    abdulrehman@focuspass.com|abdulrehman-oidc|member,engineering
+    azlankhan@focuspass.com|azlankhan-oidc|member,engineering
+    mahakhan@focuspass.com|mahakhan-oidc|member
+    zaryabayub@focuspass.com|zaryabayub-oidc|member,engineering,devops-watcher}"
+
+    log_json() {
+      printf '{"ts":"%s","component":"ziti-oidc-reconcile","msg":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
+    }
+
+    urlencode() {
+      python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+    }
+
+    first_id() {
+      python3 -c 'import json,sys; data=json.load(sys.stdin); items=data.get("data", []); print(items[0]["id"] if items else "")'
+    }
+
+    http_body() {
+      sed '$d'
+    }
+
+    http_code() {
+      tail -n1
+    }
+
+    api_request() {
+      method="$1"
+      path="$2"
+      body="${3:-}"
+
+      if [ -n "$body" ]; then
+        curl -sk -w '\n%{http_code}' -X "$method" \
+          "$controller/edge/management/v1$path" \
+          -H "zt-session: $TOKEN" \
+          -H 'Content-Type: application/json' \
+          -d "$body"
+      else
+        curl -sk -w '\n%{http_code}' -X "$method" \
+          "$controller/edge/management/v1$path" \
+          -H "zt-session: $TOKEN" \
+          -H 'Content-Type: application/json'
+      fi
+    }
+
+    api_json() {
+      method="$1"
+      path="$2"
+      body="${3:-}"
+      expected="${4:-200}"
+
+      response="$(api_request "$method" "$path" "$body")"
+      code="$(printf '%s' "$response" | http_code)"
+      payload="$(printf '%s' "$response" | http_body)"
+
+      if [ "$code" != "$expected" ]; then
+        log_json "api_error_${method}_${code}_${path}"
+        printf '%s\n' "$payload" >&2
+        exit 1
+      fi
+
+      printf '%s' "$payload"
+    }
+
+    build_auth_body() {
+      python3 -c 'import json,os; print(json.dumps({"username": os.environ["ZITI_ADMIN_USER"], "password": os.environ["ZITI_ADMIN_PASSWORD"]}))'
+    }
+
+    build_auth_policy_body() {
+      signer_id="$1"
+      SIGNER_ID="$signer_id" AUTH_POLICY_NAME="$auth_policy_name" python3 -c 'import json,os; print(json.dumps({"name": os.environ["AUTH_POLICY_NAME"], "primary": {"cert": {"allowed": True, "allowExpiredCerts": False}, "extJwt": {"allowed": True, "allowedSigners": [os.environ["SIGNER_ID"]] if os.environ["SIGNER_ID"] else []}, "updb": {"allowed": False, "lockoutDurationMinutes": 0, "maxAttempts": 0, "minPasswordLength": 5, "requireMixedCase": False, "requireNumberChar": False, "requireSpecialChar": False}}, "secondary": {"requireTotp": False}, "tags": {}}))'
+    }
+
+    build_signer_body() {
+      enroll_auth_policy_id="${1:-}"
+      ENROLL_AUTH_POLICY_ID="$enroll_auth_policy_id" \
+      SIGNER_NAME="$signer_name" \
+      ISSUER="$issuer" \
+      JWKS_ENDPOINT="$jwks_endpoint" \
+      EXTERNAL_AUTH_URL="$external_auth_url" \
+      CLIENT_ID="$client_id" \
+      AUDIENCE="$audience" \
+      python3 -c 'import json,os; body = {"name": os.environ["SIGNER_NAME"], "issuer": os.environ["ISSUER"], "jwksEndpoint": os.environ["JWKS_ENDPOINT"], "audience": os.environ["AUDIENCE"], "clientId": os.environ["CLIENT_ID"], "claimsProperty": "email", "useExternalId": True, "enabled": True, "externalAuthUrl": os.environ["EXTERNAL_AUTH_URL"], "scopes": ["openid", "profile", "email", "offline_access"], "targetToken": "ACCESS", "enrollToCertEnabled": True, "enrollToTokenEnabled": True, "enrollNameClaimsSelector": "/email", "enrollAttributeClaimsSelector": "/realm_roles", "tags": {}}; body.update({"enrollAuthPolicyId": os.environ["ENROLL_AUTH_POLICY_ID"]} if os.environ.get("ENROLL_AUTH_POLICY_ID") else {}); print(json.dumps(body))'
+    }
+
+    build_identity_body() {
+      email="$1"
+      name="$2"
+      attrs="$3"
+      AUTH_POLICY_ID="$auth_policy_id" EMAIL="$email" NAME="$name" ATTRS="$attrs" python3 -c 'import json,os; attrs = [item for item in os.environ["ATTRS"].split(",") if item]; print(json.dumps({"name": os.environ["NAME"], "type": "Default", "isAdmin": False, "authPolicyId": os.environ["AUTH_POLICY_ID"], "externalId": os.environ["EMAIL"], "roleAttributes": attrs, "tags": {}}))'
+    }
+
+    log_json "auth_start"
+    auth_response="$(curl -sk -X POST "$controller/edge/management/v1/authenticate?method=password" \
+      -H 'Content-Type: application/json' \
+      -d "$(build_auth_body)")"
+    TOKEN="$(printf '%s' "$auth_response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["token"])')"
+
+    if [ -z "$TOKEN" ]; then
+      log_json "auth_failed"
+      exit 1
+    fi
+
+    log_json "auth_ok"
+
+    policy_filter="$(urlencode "name=\"$auth_policy_name\"")"
+    policy_json="$(api_json GET "/auth-policies?filter=$policy_filter")"
+    auth_policy_id="$(printf '%s' "$policy_json" | first_id)"
+
+    if [ -z "$auth_policy_id" ]; then
+      log_json "auth_policy_create"
+      create_policy_body="$(build_auth_policy_body "")"
+      policy_create_json="$(api_json POST "/auth-policies" "$create_policy_body" 201)"
+      auth_policy_id="$(printf '%s' "$policy_create_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["id"])')"
+    else
+      log_json "auth_policy_present"
+    fi
+
+    signer_filter="$(urlencode "name=\"$signer_name\"")"
+    signer_json="$(api_json GET "/external-jwt-signers?filter=$signer_filter")"
+    signer_id="$(printf '%s' "$signer_json" | first_id)"
+
+    signer_body="$(build_signer_body "$auth_policy_id")"
+    if [ -z "$signer_id" ]; then
+      log_json "signer_create"
+      signer_create_json="$(api_json POST "/external-jwt-signers" "$signer_body" 201)"
+      signer_id="$(printf '%s' "$signer_create_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["id"])')"
+    else
+      log_json "signer_update"
+      api_json PUT "/external-jwt-signers/$signer_id" "$signer_body" >/dev/null
+    fi
+
+    policy_body="$(build_auth_policy_body "$signer_id")"
+    log_json "auth_policy_update"
+    api_json PUT "/auth-policies/$auth_policy_id" "$policy_body" >/dev/null
+
+    log_json "signer_bind_auth_policy"
+    signer_body="$(build_signer_body "$auth_policy_id")"
+    api_json PUT "/external-jwt-signers/$signer_id" "$signer_body" >/dev/null
+
+    printf '%s\n' "$oidc_users" | while IFS='|' read -r email identity attrs; do
+      [ -n "$email" ] || continue
+      identity_filter="$(urlencode "name=\"$identity\"")"
+      identity_json="$(api_json GET "/identities?filter=$identity_filter")"
+      identity_id="$(printf '%s' "$identity_json" | first_id)"
+      identity_body="$(build_identity_body "$email" "$identity" "$attrs")"
+
+      if [ -z "$identity_id" ]; then
+        log_json "identity_create_${identity}"
+        api_json POST "/identities" "$identity_body" 201 >/dev/null
+      else
+        log_json "identity_update_${identity}"
+        api_json PUT "/identities/$identity_id" "$identity_body" >/dev/null
+      fi
+    done
+
+    client_signer_json="$(curl -sk "$controller/edge/client/v1/external-jwt-signers")"
+    client_external_auth_url="$(printf '%s' "$client_signer_json" | python3 -c "import json,sys; data=json.load(sys.stdin).get('data', []); print(data[0].get('externalAuthUrl', '') if data else '')")"
+
+    if [ "$client_external_auth_url" != "$external_auth_url" ]; then
+      log_json "client_payload_mismatch"
+      exit 1
+    fi
+
+    log_json "reconcile_ok"
