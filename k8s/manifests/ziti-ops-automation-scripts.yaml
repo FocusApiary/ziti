@@ -143,13 +143,13 @@ data:
       body="${3:-}"
 
       if [ -n "$body" ]; then
-        curl -sk -w '\n%{http_code}' -X "$method" \
+        curl -sk --connect-timeout 5 --max-time 30 -w '\n%{http_code}' -X "$method" \
           "$controller/edge/management/v1$path" \
           -H "zt-session: $TOKEN" \
           -H 'Content-Type: application/json' \
           -d "$body"
       else
-        curl -sk -w '\n%{http_code}' -X "$method" \
+        curl -sk --connect-timeout 5 --max-time 30 -w '\n%{http_code}' -X "$method" \
           "$controller/edge/management/v1$path" \
           -H "zt-session: $TOKEN" \
           -H 'Content-Type: application/json'
@@ -270,10 +270,23 @@ data:
     }
 
     log_json "auth_start"
-    auth_response="$(curl -sk -X POST "$controller/edge/management/v1/authenticate?method=password" \
-      -H 'Content-Type: application/json' \
-      -d "$(build_auth_body)")"
-    TOKEN="$(printf '%s' "$auth_response" | jq -r '.data.token // ""')"
+    auth_attempt=1
+    auth_max_attempts=6
+    TOKEN=""
+    while [ "$auth_attempt" -le "$auth_max_attempts" ]; do
+      auth_response="$(curl -sk --connect-timeout 5 --max-time 30 -X POST \
+        "$controller/edge/management/v1/authenticate?method=password" \
+        -H 'Content-Type: application/json' \
+        -d "$(build_auth_body)" 2>/tmp/auth_curl_err.txt)" && auth_curl_exit=0 || auth_curl_exit=$?
+      TOKEN="$(printf '%s' "$auth_response" | jq -r '.data.token // ""' 2>/dev/null || true)"
+      if [ -n "$TOKEN" ]; then
+        break
+      fi
+      log_json "auth_retry_${auth_attempt}_curl_exit_${auth_curl_exit}"
+      cat /tmp/auth_curl_err.txt >&2 || true
+      auth_attempt=$((auth_attempt + 1))
+      [ "$auth_attempt" -le "$auth_max_attempts" ] && sleep 10
+    done
 
     if [ -z "$TOKEN" ]; then
       log_json "auth_failed"
@@ -333,7 +346,7 @@ data:
       fi
     done
 
-    client_signer_json="$(curl -sk "$controller/edge/client/v1/external-jwt-signers")"
+    client_signer_json="$(curl -sk --connect-timeout 5 --max-time 30 "$controller/edge/client/v1/external-jwt-signers")"
     client_external_auth_url="$(printf '%s' "$client_signer_json" | jq -r '.data[0].externalAuthUrl // ""')"
 
     if [ "$client_external_auth_url" != "$external_auth_url" ]; then

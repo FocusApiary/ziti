@@ -8,10 +8,10 @@ spec:
   schedule: "13 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 2
+      backoffLimit: 5
       ttlSecondsAfterFinished: 604800
       template:
         spec:
