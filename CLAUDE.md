@@ -83,8 +83,8 @@ Client -> Ziti Desktop Edge -> Ziti overlay -> Router (host mode)
 | grafana | grafana.focuscell.org | 443 | Monitoring dashboards (OIDC role mapping) |
 | draw-hardmagic | draw.hardmagic.com | 443 | Excalidraw whiteboard |
 | excalidraw-collab | collab.hardmagic.com | 443 | Excalidraw real-time collab |
-| studio-hardmagic | studio.hardmagic.com | 443 | |
-| api-studio-hardmagic | api.studio.hardmagic.com | 443 | |
+| comfy-hardmagic | comfy.hardmagic.com | 443 | |
+| api-comfy-hardmagic | api.comfy.hardmagic.com | 443 | |
 | api-vllm-hardmagic | api.vllm.hardmagic.com | 443 | OpenAI-compatible vLLM API |
 | studio-hypersight | studio.hypersight.net | 443 | |
 | domainsearch | domains.focuscell.org | 443 | Domain availability checker |

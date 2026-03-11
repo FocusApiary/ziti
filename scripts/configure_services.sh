@@ -231,8 +231,8 @@ SERVICES=(
   "grafana|grafana.focuscell.org|443|"
   "draw-hardmagic|draw.hardmagic.com|443|"
   "excalidraw-collab|collab.hardmagic.com|443|"
-  "studio-hardmagic|studio.hardmagic.com|443|"
-  "api-studio-hardmagic|api.studio.hardmagic.com|443|"
+  "comfy-hardmagic|comfy.hardmagic.com|443|"
+  "api-comfy-hardmagic|api.comfy.hardmagic.com|443|"
   "api-vllm-hardmagic|api.vllm.hardmagic.com|443|"
   "studio-hypersight|studio.hypersight.net|443|"
   "pbx-admin|admin.focuscell.org|443|"
@@ -275,8 +275,8 @@ declare -A SERVICE_GROUP=(
   [grafana]=core-services
   [draw-hardmagic]=core-services
   [excalidraw-collab]=core-services
-  [studio-hardmagic]=core-services
-  [api-studio-hardmagic]=core-services
+  [comfy-hardmagic]=core-services
+  [api-comfy-hardmagic]=core-services
   [api-vllm-hardmagic]=core-services
   [studio-hypersight]=core-services
   [pbx-admin]=voip-services

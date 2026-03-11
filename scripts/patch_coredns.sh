@@ -28,7 +28,7 @@ set -euo pipefail
 #   admin.focuscell.org       — VoIP admin panel
 #   api.focuscell.org         — VoIP API + SignalWire SMS webhooks
 #   chat.hardmagic.com        — Open WebUI (vLLM chat frontend)
-#   api.studio.hardmagic.com  — HardMagic Studio API
+#   api.comfy.hardmagic.com   — HardMagic ComfyUI API
 #   api.vllm.hardmagic.com    — HardMagic vLLM API
 #   agents.focuschef.com      — OpenClaw dashboard
 #   admin.focuschef.com       — OpenClaw admin panel
@@ -61,7 +61,7 @@ HOSTS=(
   "dev.slidee.net"
   "git.developerdojo.org"
   "chat.focusbuzz.org"
-  "studio.hardmagic.com"
+  "comfy.hardmagic.com"
   "chat.hardmagic.com"
   "studio.hypersight.net"
   "pbx.focuscell.org"
@@ -70,7 +70,7 @@ HOSTS=(
   "harbor.focuscell.org"
   "mail.focuscell.org"
   "mail-api.focuscell.org"
-  "api.studio.hardmagic.com"
+  "api.comfy.hardmagic.com"
   "api.vllm.hardmagic.com"
   "agents.focuschef.com"
   "admin.focuschef.com"
