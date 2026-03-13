@@ -231,6 +231,7 @@ SERVICES=(
   "grafana|grafana.focuscell.org|443|"
   "draw-hardmagic|draw.hardmagic.com|443|"
   "excalidraw-collab|collab.hardmagic.com|443|"
+  "studio-hardmagic|studio.hardmagic.com|443|"
   "comfy-hardmagic|comfy.hardmagic.com|443|"
   "api-comfy-hardmagic|api.comfy.hardmagic.com|443|"
   "api-vllm-hardmagic|api.vllm.hardmagic.com|443|"

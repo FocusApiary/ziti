@@ -27,6 +27,8 @@ set -euo pipefail
 #   pbx.focuscell.org         — FreeSWITCH WebRTC, VoIP softphone
 #   admin.focuscell.org       — VoIP admin panel
 #   api.focuscell.org         — VoIP API + SignalWire SMS webhooks
+#   studio.hardmagic.com      — HardMagic Studio app
+#   comfy.hardmagic.com       — HardMagic ComfyUI frontend
 #   chat.hardmagic.com        — Open WebUI (vLLM chat frontend)
 #   api.comfy.hardmagic.com   — HardMagic ComfyUI API
 #   api.vllm.hardmagic.com    — HardMagic vLLM API
@@ -61,6 +63,7 @@ HOSTS=(
   "dev.slidee.net"
   "git.developerdojo.org"
   "chat.focusbuzz.org"
+  "studio.hardmagic.com"
   "comfy.hardmagic.com"
   "chat.hardmagic.com"
   "studio.hypersight.net"
