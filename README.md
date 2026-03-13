@@ -7,6 +7,7 @@ OpenZiti ZTNA deployment for buck-lab k8s. Zero Trust Network Access for interna
 - **Controller**: manages identities, policies, PKI. Runs as a StatefulSet with BoltDB on longhorn-r2.
 - **Router**: data-plane edge router. Enrolls against the controller, handles tunneled traffic.
 - **Harbor**: upstream OpenZiti images mirrored to `harbor.focuscell.org/openziti/` for supply-chain control.
+- **Azure backup tunnel**: the `ziti-edge-tunnel` image is promoted from Harbor into ACR by an in-cluster CronJob so Azure ACI never has to pull directly from Harbor.
 - **ArgoCD**: optional GitOps sync from this repo's Helm values.
 
 ## Deployment Pipeline
@@ -54,7 +55,7 @@ Notes:
 
 ```
 k8s/
-  manifests/          Namespace, ServiceAccount
+  manifests/          Namespace, backup-proxy, backup image sync CronJob
   controller/         ziti-controller Helm values
   router/             ziti-router Helm values
   argocd/             ArgoCD Application manifests
