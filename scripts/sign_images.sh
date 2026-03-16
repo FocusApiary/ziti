@@ -134,7 +134,7 @@ spec:
               PASS=\${AUTH#*:}
 
               DIGEST=\$(curl -fsS --cacert /ssl/ca-certificates.crt -u "\${USER}:\${PASS}" \
-                -H "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
+                -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
                 -I "https://${REGISTRY}/v2/${repository}/manifests/${IMAGE_TAG}" 2>/dev/null \
                 | grep -i docker-content-digest | tr -d '\r' | awk '{print \$2}')
               [ -n "\${DIGEST}" ] && [ "\${DIGEST}" != "null" ] || {
